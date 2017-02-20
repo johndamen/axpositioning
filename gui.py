@@ -1,4 +1,3 @@
-from PyQt5 import QtWidgets, QtCore
 from collections import OrderedDict
 import subprocess
 import sys
@@ -6,12 +5,32 @@ import pickle
 from functools import partial
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import warnings
+
+# try PyQt5, otherwise use PyQt4
+try:
+    from PyQt5 import QtWidgets, QtCore
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+except ImportError as e:
+    warnings.warn('Could not import PyQt5, attempting PyQt4', ImportWarning)
+    from PyQt4 import QtGui as QtWidgets, QtCore
+    from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+
 
 from .axpositioning import PositioningAxes
 
 
 class AxPositioningEditor(QtWidgets.QWidget):
+    """
+    main widget for editing axes positions
+
+    Example:
+    >>>from matplotlib import pyplot as plt
+    >>>fig = plt.figure()
+    >>>w, h = fig.get_size_inches()
+    >>>AxPositioningEditor((w, h), bounds=[])
+
+    """
 
     position_dict = OrderedDict([
         ('ll', 'lower left'),
@@ -37,29 +56,37 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.pointing_axes = False
 
     def get_bounds(self):
+        """returns a list of axes bounds as [(x, y, w, h)]"""
         bounds = []
         for n, a in self.axes.items():
             bounds.append(a.bounds)
         return bounds
 
     def draw_axes(self, event):
+        """create an axes at the click location if self.pointing_axes is enabled"""
         if self.pointing_axes:
             x, y = self.figure.transFigure.inverted().transform((event.x, event.y))
             self.add_axes_at_position(x, y)
             self.pointing_axes = False
+            # clear the message widget
             self.set_message(None)
 
     def add_axes_clicked(self):
+        """handle clicking the 'Add Axes' button"""
+
+        # open a dialog
         w = NewAxesDialog(self.figure)
         w.show()
         w.exec()
         data = w.value.copy()
         w.deleteLater()
 
+        # enable clicking for new axes if defined
         self.pointing_axes = data.pop('click', False)
         if self.pointing_axes:
             self.set_message('click in the figure to add an axes at that location')
 
+        # create axes from specified bounds
         try:
             for bnd in data['bounds']:
                 self.add_axes(bnd)
@@ -67,22 +94,23 @@ class AxPositioningEditor(QtWidgets.QWidget):
             pass
 
     def add_axes_at_position(self, x, y):
+        """add axes at specified location in Figure coordinates"""
         return self.add_axes([x - .2, y - .2, .4, .4])
 
     def add_axes(self, bounds, n=None):
+        """
+        add an axes from specified bounds
+        :param bounds: bounds as (x, y, w, h)
+        :param n: name of the axes
+        """
         if n is None:
-            axnames = list(self.axes.keys())
-            for i in range(50):
-                n = chr(65 + i)
-                if n not in axnames:
-                    break
-            else:
-                raise ValueError('could not find unique axis name')
+            n = self.next_axes_name()
 
         self.axes[n] = PositioningAxes(self.figure, bounds, anchor=self.anchor)
         self.draw(posfields=True)
 
     def set_axes(self, bounds):
+        """set several axes from a list of bounds"""
         self.axes = OrderedDict()
         for bnd in bounds:
             name = self.next_axes_name()
@@ -90,6 +118,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
             self.axes[name] = a
 
     def next_axes_name(self):
+        """generate a new unique axes name"""
         axnames = list(self.axes.keys())
         for i in range(50):
             n = chr(65 + i)
@@ -98,6 +127,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         raise ValueError('could not find unique axis name')
 
     def build(self):
+        """build the widget"""
         self.setMinimumWidth(500)
         self.setMinimumHeight(400)
         layout = QtWidgets.QVBoxLayout(self)
@@ -117,6 +147,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.set_message(None)
 
     def build_figure(self, layout):
+        """build the figure area"""
         figure_scroll_area = QtWidgets.QScrollArea()
 
         self.canvas = FigureCanvas(self.figure)
@@ -124,10 +155,14 @@ class AxPositioningEditor(QtWidgets.QWidget):
         layout.addWidget(figure_scroll_area)
 
     def build_tools(self, layout):
+        """build the tools area"""
+
+        # create layout
         tools_layout = QtWidgets.QVBoxLayout()
         tools_layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(tools_layout)
 
+        # create anchors
         anchor_layout = QtWidgets.QVBoxLayout()
         radio_set = QtWidgets.QButtonGroup()
         radio_set.setExclusive(True)
@@ -140,10 +175,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
             anchor_layout.addWidget(w)
         tools_layout.addLayout(anchor_layout)
 
+        # create add axes button
         add_axes_button = QtWidgets.QPushButton('Add axes')
         add_axes_button.clicked.connect(self.add_axes_clicked)
         tools_layout.addWidget(add_axes_button)
 
+        # create table for axes positions
         self.axtable = AxesPositionsWidget(self.axes)
         self.axtable.setFixedWidth(300)
         self.axtable.changed.connect(self.set_ax_position)
@@ -151,12 +188,25 @@ class AxPositioningEditor(QtWidgets.QWidget):
         tools_layout.addWidget(self.axtable)
 
     def set_ax_position(self, axname, attr, value):
+        """
+        set the position of an axes from the attribute name
+        :param axname: name of the axes
+        :param attr: name of the position attribute
+        :param value: value of the position attribute
+        """
         ax = self.axes[axname]
         setattr(ax, attr, value)
         self.draw()
 
     def set_message(self, msg, level='INFO'):
+        """
+        set a message in the message window
+        hide the messages if msg is None
+        :param msg: message text
+        :param level: level (see logging levels) of the message
+        """
         if msg is None:
+            self.msg_label.setText('')
             self.msg_label.hide()
         else:
             self.msg_label.show()
@@ -170,7 +220,13 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.msg_label.setStyleSheet(styles[level])
         self.msg_label.setText(msg)
 
+    def add_message(self, msg):
+        """add to the end of the message (keep formatting)"""
+        txt = self.msg_label.text()
+        self.msg_label.setText(txt+'\n'+msg)
+
     def draw(self, posfields=False):
+        """redraw the contents"""
         self.figure.clear()
         for name, a in self.axes.items():
             a.format_placeholder(name)
@@ -182,6 +238,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
             self.axtable.fill(self.axes)
 
     def update_anchor(self, pos, clicked):
+        """set the position reference anchor of the axes to a new location"""
         if clicked:
             for name, a in self.axes.items():
                 a.set_anchor_point(pos)
@@ -189,11 +246,20 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.draw(posfields=True)
 
     def delete_axes(self, name):
+        """delete an axes from the editor"""
         self.axes.pop(name)
         self.draw(posfields=True)
 
 
 class AxesPositionsWidget(QtWidgets.QTableWidget):
+
+    """
+    table of axes positions
+
+    signals:
+    - changed(axes_name, attr_name, value)
+    - deleted(axes_name)
+    """
 
     changed = QtCore.pyqtSignal(str, str, object)
     deleted = QtCore.pyqtSignal(str)
@@ -207,6 +273,7 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
         pass
 
     def fill(self, axes):
+        """fill the table based on the given axes position objects"""
         headers = ['X', 'X', 'Width', 'Height', 'Aspect', 'Actions']
         widths = [45, 45, 45, 45, 45, 50]
         self.setColumnCount(len(headers))
@@ -307,7 +374,14 @@ class MultiIntField(IntField):
         if isinstance(v, tuple):
             return v
         elif isinstance(v, str):
-            return tuple(IntField.cast(self, v.strip()) for v in v.split(','))
+            if ':' in v:
+                if ',' in v:
+                    raise ValueError('cannot combine range with individual items')
+                start, end = v.split(':', 1)
+                return tuple(range(IntField.cast(self, start.strip()),
+                                   IntField.cast(self, end.strip())))
+            else:
+                return tuple(IntField.cast(self, v.strip()) for v in v.split(','))
         else:
             raise ValueError('invalid value type {}'.format(type(v)))
 
