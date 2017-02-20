@@ -146,6 +146,9 @@ class PositioningAxes(Axes):
         """real aspect ratio of figure and axes together"""
         _, _, aw, ah = self.bounds
         return self.figaspect * (aw/ah)
+    @aspect.setter
+    def aspect(self, v):
+        self.set_aspect_ratio(v)
 
     def lock_aspect(self, b):
         """keep the aspect fixed"""
