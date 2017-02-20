@@ -16,8 +16,14 @@ except ImportError as e:
     from PyQt4 import QtGui as QtWidgets, QtCore
     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 
-
 from .axpositioning import PositioningAxes
+
+
+def hline():
+    f = QtWidgets.QFrame()
+    f.setFrameShape(QtWidgets.QFrame.HLine)
+    f.setFrameShadow(QtWidgets.QFrame.Sunken)
+    return f
 
 
 class AxPositioningEditor(QtWidgets.QWidget):
@@ -39,6 +45,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
         ('lr', 'lower right'),
         ('c', 'center')])
 
+    click_axes_data = dict(w=.3, h=.3)
+
     def __init__(self, figsize, bounds=(), dpi=None):
         super().__init__()
         self.anchor = 'c'
@@ -47,100 +55,30 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.figure = Figure(figsize=(w, h))
 
         if dpi is None:
-            dpi = 800 / w
+            dpi = 800 / max(w, h)
             self.figure.set_dpi(dpi)
 
-        self.set_axes(bounds)
+        self.set_axes(bounds, reset=True, draw=False)
         self.build()
         self.canvas.mpl_connect('button_release_event', self.draw_axes)
         self.pointing_axes = False
 
-    def get_bounds(self):
-        """returns a list of axes bounds as [(x, y, w, h)]"""
-        bounds = []
-        for n, a in self.axes.items():
-            bounds.append(a.bounds)
-        return bounds
-
-    def draw_axes(self, event):
-        """create an axes at the click location if self.pointing_axes is enabled"""
-        if self.pointing_axes:
-            x, y = self.figure.transFigure.inverted().transform((event.x, event.y))
-            self.add_axes_at_position(x, y)
-            self.pointing_axes = False
-            # clear the message widget
-            self.set_message(None)
-
-    def add_axes_clicked(self):
-        """handle clicking the 'Add Axes' button"""
-
-        # open a dialog
-        w = NewAxesDialog(self.figure)
-        w.show()
-        w.exec()
-        data = w.value.copy()
-        w.deleteLater()
-
-        # enable clicking for new axes if defined
-        self.pointing_axes = data.pop('click', False)
-        if self.pointing_axes:
-            self.set_message('click in the figure to add an axes at that location')
-
-        # create axes from specified bounds
-        try:
-            for bnd in data['bounds']:
-                self.add_axes(bnd)
-        except KeyError:
-            pass
-
-    def add_axes_at_position(self, x, y):
-        """add axes at specified location in Figure coordinates"""
-        return self.add_axes([x - .2, y - .2, .4, .4])
-
-    def add_axes(self, bounds, n=None):
-        """
-        add an axes from specified bounds
-        :param bounds: bounds as (x, y, w, h)
-        :param n: name of the axes
-        """
-        if n is None:
-            n = self.next_axes_name()
-
-        self.axes[n] = PositioningAxes(self.figure, bounds, anchor=self.anchor)
-        self.draw(posfields=True)
-
-    def set_axes(self, bounds):
-        """set several axes from a list of bounds"""
-        self.axes = OrderedDict()
-        for bnd in bounds:
-            name = self.next_axes_name()
-            a = PositioningAxes(self.figure, bnd, anchor=self.anchor)
-            self.axes[name] = a
-
-    def next_axes_name(self):
-        """generate a new unique axes name"""
-        axnames = list(self.axes.keys())
-        for i in range(50):
-            n = chr(65 + i)
-            if n not in axnames:
-                return n
-        raise ValueError('could not find unique axis name')
-
     def build(self):
         """build the widget"""
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(400)
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(350)
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
-        self.msg_label = QtWidgets.QLabel()
-        self.msg_label.setContentsMargins(5, 5, 5, 5)
-        layout.addWidget(self.msg_label)
         content_layout = QtWidgets.QHBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(content_layout)
 
         self.build_figure(content_layout)
         self.build_tools(content_layout)
+
+        self.msg_label = QtWidgets.QLabel()
+        self.msg_label.setContentsMargins(5, 5, 5, 5)
+        layout.addWidget(self.msg_label)
 
         self.draw()
 
@@ -157,13 +95,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
     def build_tools(self, layout):
         """build the tools area"""
 
-        # create layout
-        tools_layout = QtWidgets.QVBoxLayout()
-        tools_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(tools_layout)
+        tools_widget = QtWidgets.QTabWidget()
+        tools_widget.setFixedWidth(330)
+        layout.addWidget(tools_widget)
 
-        # create anchors
-        anchor_layout = QtWidgets.QVBoxLayout()
+        aw = QtWidgets.QWidget()
+        anchor_layout = QtWidgets.QVBoxLayout(aw)
         radio_set = QtWidgets.QButtonGroup()
         radio_set.setExclusive(True)
         for pos, name in self.position_dict.items():
@@ -173,19 +110,101 @@ class AxPositioningEditor(QtWidgets.QWidget):
             w.clicked.connect(partial(self.update_anchor, pos))
             radio_set.addButton(w)
             anchor_layout.addWidget(w)
-        tools_layout.addLayout(anchor_layout)
+        anchor_layout.addItem(QtWidgets.QSpacerItem(
+            0, 0,
+            QtWidgets.QSizePolicy.Maximum,
+            QtWidgets.QSizePolicy.Expanding))
+        tools_widget.addTab(aw, 'Anchors')
 
-        # create add axes button
-        add_axes_button = QtWidgets.QPushButton('Add axes')
-        add_axes_button.clicked.connect(self.add_axes_clicked)
-        tools_layout.addWidget(add_axes_button)
-
-        # create table for axes positions
+        w = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(w)
+        clear_all_button = QtWidgets.QPushButton('Clear all')
+        clear_all_button.clicked.connect(self.clear_all)
+        layout.addWidget(clear_all_button)
         self.axtable = AxesPositionsWidget(self.axes)
-        self.axtable.setFixedWidth(300)
         self.axtable.changed.connect(self.set_ax_position)
         self.axtable.deleted.connect(self.delete_axes)
-        tools_layout.addWidget(self.axtable)
+        layout.addWidget(self.axtable)
+        tools_widget.addTab(w, 'Positions')
+
+        w = AddAxesWidget(self.figure)
+        w.newbounds.connect(self.set_axes)
+        w.axes_added.connect(lambda x: self.add_axes_at_position(**x))
+        w.click_axes.connect(self.click_new_axes)
+        tools_widget.addTab(w, 'Add axes')
+
+    def get_bounds(self):
+        """returns a list of axes bounds as [(x, y, w, h)]"""
+        bounds = []
+        for n, a in self.axes.items():
+            bounds.append(a.bounds)
+        return bounds
+
+    def draw_axes(self, event):
+        """create an axes at the click location if self.pointing_axes is enabled"""
+        if self.pointing_axes:
+            x, y = self.figure.transFigure.inverted().transform((event.x, event.y))
+            print('drawing at', x, y, file=sys.stderr)
+            self.add_axes_at_position(x, y, **self.click_axes_data)
+            self.pointing_axes = False
+            # clear the message widget
+            self.set_message(None)
+
+    def click_new_axes(self, data):
+        self.pointing_axes = True
+        self.click_axes_data = data
+
+    def add_axes_at_position(self, x, y, w=.4, h=.4, n=None, draw=True):
+        """add axes at specified location in Figure coordinates"""
+
+        if n is None:
+            n = self.next_axes_name()
+
+        self.axes[n] = PositioningAxes.from_position(
+            self.figure, x, y, w, h, anchor=self.anchor)
+
+        if draw:
+            self.draw(posfields=True)
+
+    def add_axes(self, bounds, n=None, draw=True):
+        """
+        add an axes from specified bounds
+        :param bounds: bounds as (x, y, w, h)
+        :param n: name of the axes
+        """
+        if n is None:
+            n = self.next_axes_name()
+
+        self.axes[n] = PositioningAxes(self.figure, bounds, anchor=self.anchor)
+
+        if draw:
+            self.draw(posfields=True)
+
+    def set_axes(self, bounds, reset=False, draw=True):
+        """set several axes from a list of bounds"""
+        if reset:
+            self.axes = OrderedDict()
+
+        for bnd in bounds:
+            self.add_axes(bnd, draw=False)
+
+        if draw:
+            self.draw(posfields=True)
+
+    def next_axes_name(self):
+        """generate a new unique axes name"""
+        axnames = list(self.axes.keys())
+        for i in range(50):
+            n = chr(65 + i)
+            if n not in axnames:
+                return n
+        raise ValueError('could not find unique axis name')
+
+    def clear_all(self):
+        self.figure.clear()
+        for k in list(self.axes.keys()):
+            self.delete_axes(k, redraw=False)
+        self.draw(posfields=True)
 
     def set_ax_position(self, axname, attr, value):
         """
@@ -194,9 +213,9 @@ class AxPositioningEditor(QtWidgets.QWidget):
         :param attr: name of the position attribute
         :param value: value of the position attribute
         """
-        ax = self.axes[axname]
-        setattr(ax, attr, value)
-        self.draw()
+        ax = self.axes[str(axname)]
+        setattr(ax, str(attr), value)
+        self.draw(posfields=True)
 
     def set_message(self, msg, level='INFO'):
         """
@@ -245,10 +264,11 @@ class AxPositioningEditor(QtWidgets.QWidget):
                 self.anchor = pos
         self.draw(posfields=True)
 
-    def delete_axes(self, name):
+    def delete_axes(self, name, redraw=True):
         """delete an axes from the editor"""
-        self.axes.pop(name)
-        self.draw(posfields=True)
+        self.axes.pop(str(name))
+        if redraw:
+            self.draw(posfields=True)
 
 
 class AxesPositionsWidget(QtWidgets.QTableWidget):
@@ -274,7 +294,7 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
 
     def fill(self, axes):
         """fill the table based on the given axes position objects"""
-        headers = ['X', 'X', 'Width', 'Height', 'Aspect', 'Actions']
+        headers = ['X', 'Y', 'Width', 'Height', 'Aspect', 'Actions']
         widths = [45, 45, 45, 45, 45, 50]
         self.setColumnCount(len(headers))
         self.setShowGrid(False)
@@ -360,6 +380,7 @@ class IntField(NumField):
     def format(self, v):
         return str(v)
 
+
 class MultiIntField(IntField):
 
     changed = QtCore.pyqtSignal(tuple)
@@ -401,53 +422,162 @@ class FloatField(NumField):
         return float(v)
 
 
-class NewAxesDialog(QtWidgets.QDialog):
+class AddAxesWidget(QtWidgets.QWidget):
 
-    FIELD_SPEC = OrderedDict()
-    FIELD_SPEC['nrows']  = dict(cls=IntField, value=1)
-    FIELD_SPEC['ncols']  = dict(cls=IntField, value=1)
-    FIELD_SPEC['index']    = dict(cls=MultiIntField, value=(0,))
-    FIELD_SPEC['left']   = dict(cls=FloatField, value=0.1)
-    FIELD_SPEC['bottom'] = dict(cls=FloatField, value=0.1)
-    FIELD_SPEC['right']  = dict(cls=FloatField, value=0.9)
-    FIELD_SPEC['top']    = dict(cls=FloatField, value=0.9)
-    FIELD_SPEC['wspace'] = dict(cls=FloatField, value=0.05)
-    FIELD_SPEC['hspace'] = dict(cls=FloatField, value=0.05)
+    VALUES = dict(
+        nrows=1,
+        ncols=1,
+        index=(0,),
+        left=0.1,
+        right=0.9,
+        bottom=0.1,
+        top=0.9,
+        hspace=0.05,
+        wspace=0.05,
+
+        pos_width=0.4,
+        pos_height=0.4,
+        pos_x=.5,
+        pos_y=.5
+    )
+
+    newbounds = QtCore.pyqtSignal(list)
+    axes_added = QtCore.pyqtSignal(dict)
+    click_axes = QtCore.pyqtSignal(dict)
 
     def __init__(self, figure):
         super().__init__()
-        self.layout = QtWidgets.QVBoxLayout(self)
+        self.figure = figure
 
-        gridform = QtWidgets.QFormLayout()
-        self.fields = dict()
-        for k, spec in self.FIELD_SPEC.items():
-            self.fields[k] = f = spec['cls'](spec['value'])
-            gridform.addRow(k, f)
-        self.layout.addLayout(gridform)
+        self.layout = QtWidgets.QVBoxLayout(self)
+        self.build_posform()
+        self.layout.addWidget(hline())
+        self.build_gridform()
+
+        self.layout.addItem(QtWidgets.QSpacerItem(
+            0, 0,
+            QtWidgets.QSizePolicy.Maximum,
+            QtWidgets.QSizePolicy.Expanding))
+
+    def build_gridform(self):
+        layout = QtWidgets.QHBoxLayout()
+        self.layout.addLayout(layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        gridform_left = QtWidgets.QFormLayout()
+        gridform_left.setSpacing(3)
+        layout.addLayout(gridform_left)
+
+        gridform_right = QtWidgets.QFormLayout()
+        gridform_right.setSpacing(3)
+        layout.addLayout(gridform_right)
+
+        self.gridfields = dict()
+
+        self.gridfields['nrows'] = f = IntField(self.VALUES['nrows'])
+        gridform_left.addRow('rows', f)
+
+        self.gridfields['ncols'] = f = IntField(self.VALUES['ncols'])
+        gridform_left.addRow('columns', f)
+
+        self.gridfields['index'] = f = MultiIntField(self.VALUES['index'])
+        gridform_left.addRow('indices', f)
+
+        self.all_checkbox = f = QtWidgets.QCheckBox('all')
+        f.stateChanged.connect(self.checked_all)
+        f.setChecked(False)
+        gridform_left.addRow('', f)
+
+
+        self.gridfields['left'] = f = FloatField(self.VALUES['left'])
+        gridform_right.addRow('left', f)
+
+        self.gridfields['bottom'] = f = FloatField(self.VALUES['bottom'])
+        gridform_right.addRow('bottom', f)
+
+        self.gridfields['right'] = f = FloatField(self.VALUES['right'])
+        gridform_right.addRow('right', f)
+
+        self.gridfields['top'] = f = FloatField(self.VALUES['top'])
+        gridform_right.addRow('top', f)
+
+        self.gridfields['wspace'] = f = FloatField(self.VALUES['wspace'])
+        gridform_right.addRow('wspace', f)
+
+        self.gridfields['hspace'] = f = FloatField(self.VALUES['hspace'])
+        gridform_right.addRow('hspace', f)
+
+        button_layout = QtWidgets.QHBoxLayout()
+        self.layout.addLayout(button_layout)
 
         self.grid_button = QtWidgets.QPushButton('Add from grid')
+        self.grid_button.setFixedWidth(200)
         self.grid_button.clicked.connect(self.add_from_grid)
-        self.layout.addWidget(self.grid_button)
+        button_layout.addWidget(self.grid_button)
 
-        hline = QtWidgets.QFrame()
-        hline.setFrameShape(QtWidgets.QFrame.HLine)
-        hline.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.layout.addWidget(hline)
+    def build_posform(self):
+        layout = QtWidgets.QHBoxLayout()
+        self.layout.addLayout(layout)
+        self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.click_button = QtWidgets.QPushButton('Click in axes')
-        self.click_button.clicked.connect(self.click_axes)
-        self.layout.addWidget(self.click_button)
+        posform_left = QtWidgets.QFormLayout()
+        posform_left.setSpacing(3)
+        layout.addLayout(posform_left)
 
-        self.figure = figure
-        self.value = dict()
+        posform_right = QtWidgets.QFormLayout()
+        posform_right.setSpacing(3)
+        layout.addLayout(posform_right)
 
-    def click_axes(self):
-        self.value['click'] = True
-        self.accept()
+
+        self.posfields = dict()
+
+        self.posfields['w'] = f = FloatField(self.VALUES['pos_width'])
+        posform_left.addRow('width', f)
+
+        self.posfields['h'] = f = FloatField(self.VALUES['pos_height'])
+        posform_left.addRow('height', f)
+
+        self.posfields['x'] = f = FloatField(self.VALUES['pos_x'])
+        posform_right.addRow('x', f)
+
+        self.posfields['y'] = f = FloatField(self.VALUES['pos_y'])
+        posform_right.addRow('y', f)
+
+
+        button_layout = QtWidgets.QHBoxLayout()
+        self.layout.addLayout(button_layout)
+
+        self.pos_button = QtWidgets.QPushButton('Add')
+        self.pos_button.clicked.connect(self.add_at_pos)
+        button_layout.addWidget(self.pos_button)
+
+        self.click_button = QtWidgets.QPushButton('Click in figure')
+        self.click_button.clicked.connect(self.add_at_click)
+        button_layout.addWidget(self.click_button)
+
+    def checked_all(self, b):
+        if b:
+            self.gridfields['index'].setDisabled(True)
+        else:
+            self.gridfields['index'].setDisabled(False)
+
+    def add_at_pos(self):
+        data = dict(w=self.posfields['w'].value(),
+                    h=self.posfields['h'].value(),
+                    x=self.posfields['x'].value(),
+                    y=self.posfields['y'].value())
+        print(data)
+        self.axes_added.emit(data)
+
+    def add_at_click(self):
+        data = dict(w=self.posfields['w'].value(),
+                    h=self.posfields['h'].value())
+        print(data)
+        self.click_axes.emit(data)
 
     def add_from_grid(self):
         data = dict()
-        for k, f in self.fields.items():
+        for k, f in self.gridfields.items():
             try:
                 v = f.value()
             except ValueError as e:
@@ -455,14 +585,18 @@ class NewAxesDialog(QtWidgets.QDialog):
                 msg.setText('Invalid value for {}: {}'.format(k, e))
                 msg.exec()
                 return
-            self.FIELD_SPEC[k]['value'] = v
+            self.VALUES[k] = v
             if k in ('nrows', 'ncols', 'left', 'right', 'top', 'bottom', 'wspace', 'hspace'):
                 data[k] = v
 
         gs = GridSpec(**data)
-        self.value['bounds'] = []
+        bounds = []
 
-        I = self.fields['index'].value()
+        if self.all_checkbox.isChecked():
+            I = tuple(range(data['nrows'] * data['ncols']))
+        else:
+            I = self.gridfields['index'].value()
+
         if isinstance(I, int):
             I = (I,)
         if isinstance(I, tuple):
@@ -474,10 +608,11 @@ class NewAxesDialog(QtWidgets.QDialog):
                     msg.setText('Invalid grid index: {}'.format(e))
                     msg.exec()
                     return
-                self.value['bounds'].append(bnd)
+                bounds.append(bnd)
         else:
             raise TypeError('invalid index type')
-        self.accept()
+
+        self.newbounds.emit(bounds)
 
 
 def position_axes_gui(figsize, bounds, **kwargs):
@@ -528,7 +663,7 @@ def adjust_axes(fig, **kwargs):
     axes = fig.get_axes()
     bounds = [a.get_position().bounds for a in axes]
 
-    newbounds = position_axes_gui_subprocess((8, 6), bounds)
+    newbounds = position_axes_gui_subprocess(fig.get_size_inches(), bounds)
 
     for a in axes[len(newbounds):]:
         fig.delaxes(a)
@@ -552,8 +687,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--width', '-W', default=12, type=int)
-    parser.add_argument('--height', '-H', default=8, type=int)
+    parser.add_argument('--width', '-W', default=8, type=float)
+    parser.add_argument('--height', '-H', default=6, type=float)
     parser.add_argument('--stream-bounds', dest='stream_bounds', action='store_true')
 
     kw = vars(parser.parse_args())
