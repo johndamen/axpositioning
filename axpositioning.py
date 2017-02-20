@@ -172,12 +172,20 @@ class PositioningAxes(Axes):
         self.set_yticks([])
         self.set_xlim(-1, 1)
         self.set_ylim(-1, 1)
-        self.text(.5, .5, label, ha='center', va='center', transform=self.transAxes, zorder=2)
+        self.text(.1, .9, label, ha='left', va='top', transform=self.transAxes, zorder=2)
 
         ax, ay = self._anchor_point
-        self.scatter([ax], [ay], marker='o', transform=self.transAxes, color=(.5, .5, .9), s=200, clip_on=False, zorder=1)
+        self.scatter([ax], [ay], marker='+', transform=self.transAxes, color=(.9, .1, .1), s=50, clip_on=False, zorder=1)
 
     def __str__(self):
         return '<{} {}>'.format(self.__class__.__qualname__, self.bounds)
 
-
+    @classmethod
+    def from_position(cls, fig, x, y, w, h, anchor):
+        """
+        accounts for anchor when setting the bounds from the position
+        """
+        # TODO: incorporate in __init__ using apply_anchor=True
+        o = cls(fig, [x, y, w, h], anchor=anchor)
+        o.x, o.y, o.w, o.h = x, y, w, h
+        return o
