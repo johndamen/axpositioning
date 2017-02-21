@@ -1,4 +1,5 @@
 from matplotlib.axes import Axes
+from matplotlib.transforms import Bbox
 
 
 class PositioningAxes(Axes):
@@ -7,36 +8,20 @@ class PositioningAxes(Axes):
     Class for editing axes position
     """
 
-    _anchor_point = (0, 0)
-
     @classmethod
     def from_axes(cls, fig, a, **kwargs):
         return cls(fig, a.get_position().bounds, **kwargs)
 
-    def __init__(self, fig, bounds, lock_aspect=False, anchor='ll', **kwargs):
-        self._locked_aspect = lock_aspect
-        self.set_anchor_point(anchor)
+    def __init__(self, fig, bounds, lock_aspect=False, anchor='C', **kwargs):
         super(PositioningAxes, self).__init__(fig, bounds, **kwargs)
+        self._locked_aspect = lock_aspect
+        self.set_anchor(anchor)
 
-    def set_anchor_point(self, pos=(0, 0)):
-        """
-        set reference point for x and y
-        this can be entered as a tuple of axes coordinates
-        ll: lower left  (0.0, 0.0)
-        ul: upper left  (0.0, 1.0)
-        ur: upper right (1.0, 1.0)
-        lr: lower right (1.0, 0.0)
-        c:  center      (0.5, 0.5)
-        """
-        posdict = dict(ll=(0, 0), ul=(0, 1), ur=(1, 1), lr=(1, 0), c=(.5, .5))
-        if isinstance(pos, str):
-            try:
-                pos = posdict[pos]
-            except KeyError:
-                raise KeyError('invalid position name')
-        if not isinstance(pos, tuple):
-            raise TypeError('invalid position type')
-        self._anchor_point = pos
+    def set_anchor(self, a):
+        """ensure tuple of anchor position and set using Axes.set_anchor"""
+        if a in Bbox.coefs:
+            a = Bbox.coefs[a]
+        self._anchor = a
 
     @property
     def bounds(self):
@@ -49,19 +34,19 @@ class PositioningAxes(Axes):
 
     def x2xll(self, x):
         """convert x position to xll based on anchor"""
-        return x - self.w * self._anchor_point[0]
+        return x - self.w * self.get_anchor()[0]
 
     def xll2x(self, xll):
         """convert xll to x position based on anchor"""
-        return xll + self.w * self._anchor_point[0]
+        return xll + self.w * self.get_anchor()[0]
 
     def y2yll(self, y):
         """convert y position to yll based on anchor"""
-        return y - self.h * self._anchor_point[1]
+        return y - self.h * self.get_anchor()[1]
 
     def yll2y(self, yll):
         """convert yll to y position based on anchor"""
-        return yll + self.h * self._anchor_point[1]
+        return yll + self.h * self.get_anchor()[1]
 
     @property
     def x(self):
@@ -98,13 +83,13 @@ class PositioningAxes(Axes):
         xll, yll, w0, h = self.bounds
 
         # adjust horizontal position based on anchor
-        xll += self._anchor_point[0] * (w0 - w)
+        xll += self.get_anchor()[0] * (w0 - w)
 
         # adjust height if aspect is locked
         if self._locked_aspect:
             h0, h = h, w / self.axaspect
             # adjust vertical position based on anchor
-            yll += self._anchor_point[1] * (h0 - h)
+            yll += self.get_anchor()[1] * (h0 - h)
         self.bounds = xll, yll, w, h
 
     @property
@@ -121,13 +106,13 @@ class PositioningAxes(Axes):
         xll, yll, w, h0 = self.bounds
 
         # adjust vertical position based on anchor
-        yll += self._anchor_point[1] * (h0 - h)
+        yll += self.get_anchor()[1] * (h0 - h)
 
         # adjust width if aspect is locked
         if self._locked_aspect:
             w0, w = w, h * self.axaspect
             # adjust horizontal position based on anchor
-            xll += self._anchor_point[0] * (w0 - w)
+            xll += self.get_anchor()[0] * (w0 - w)
         self.bounds = xll, yll, w, h
 
     @property
@@ -174,7 +159,7 @@ class PositioningAxes(Axes):
         self.set_ylim(-1, 1)
         self.text(.1, .9, label, ha='left', va='top', transform=self.transAxes, zorder=2)
 
-        ax, ay = self._anchor_point
+        ax, ay = self.get_anchor()
         self.scatter([ax], [ay], marker='+', transform=self.transAxes, color=(.9, .1, .1), s=50, clip_on=False, zorder=1)
 
     def __str__(self):

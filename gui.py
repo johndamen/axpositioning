@@ -39,17 +39,17 @@ class AxPositioningEditor(QtWidgets.QWidget):
     """
 
     position_dict = OrderedDict([
-        ('ll', 'lower left'),
-        ('ul', 'upper left'),
-        ('ur', 'upper right'),
-        ('lr', 'lower right'),
-        ('c', 'center')])
+        ('SW', 'lower left'),
+        ('NW', 'upper left'),
+        ('NE', 'upper right'),
+        ('SE', 'lower right'),
+        ('C', 'center')])
 
     click_axes_data = dict(w=.3, h=.3)
 
     def __init__(self, figsize, bounds=(), dpi=None):
         super().__init__()
-        self.anchor = 'c'
+        self.anchor = 'C'
 
         w, h = figsize
         self.figure = Figure(figsize=(w, h))
@@ -96,7 +96,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         """build the tools area"""
 
         tools_widget = QtWidgets.QTabWidget()
-        tools_widget.setFixedWidth(330)
+        tools_widget.setFixedWidth(350)
         layout.addWidget(tools_widget)
 
         aw = QtWidgets.QWidget()
@@ -144,8 +144,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         """create an axes at the click location if self.pointing_axes is enabled"""
         if self.pointing_axes:
             x, y = self.figure.transFigure.inverted().transform((event.x, event.y))
-            print('drawing at', x, y, file=sys.stderr)
-            self.add_axes_at_position(x, y, **self.click_axes_data)
+            a = self.add_axes_at_position(x, y, **self.click_axes_data)
             self.pointing_axes = False
             # clear the message widget
             self.set_message(None)
@@ -165,6 +164,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
         if draw:
             self.draw(posfields=True)
+
+        return self.axes[n]
 
     def add_axes(self, bounds, n=None, draw=True):
         """
@@ -260,8 +261,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
         """set the position reference anchor of the axes to a new location"""
         if clicked:
             for name, a in self.axes.items():
-                a.set_anchor_point(pos)
-                self.anchor = pos
+                a.set_anchor(pos)
+            self.anchor = pos
         self.draw(posfields=True)
 
     def delete_axes(self, name, redraw=True):
@@ -566,13 +567,11 @@ class AddAxesWidget(QtWidgets.QWidget):
                     h=self.posfields['h'].value(),
                     x=self.posfields['x'].value(),
                     y=self.posfields['y'].value())
-        print(data)
         self.axes_added.emit(data)
 
     def add_at_click(self):
         data = dict(w=self.posfields['w'].value(),
                     h=self.posfields['h'].value())
-        print(data)
         self.click_axes.emit(data)
 
     def add_from_grid(self):
