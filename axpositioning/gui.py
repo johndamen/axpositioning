@@ -16,7 +16,7 @@ except ImportError as e:
     from PyQt4 import QtGui as QtWidgets, QtCore
     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 
-from .axpositioning import PositioningAxes
+from axpositioning import PositioningAxes
 
 
 def hline():
