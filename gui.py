@@ -67,18 +67,17 @@ class AxPositioningEditor(QtWidgets.QWidget):
         """build the widget"""
         self.setMinimumWidth(600)
         self.setMinimumHeight(350)
-        layout = QtWidgets.QVBoxLayout(self)
+        layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
-        content_layout = QtWidgets.QHBoxLayout()
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(content_layout)
 
-        self.build_figure(content_layout)
-        self.build_tools(content_layout)
+        figure_layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(figure_layout)
+        self.build_figure(figure_layout)
+        self.build_tools(layout)
 
         self.msg_label = QtWidgets.QLabel()
         self.msg_label.setContentsMargins(5, 5, 5, 5)
-        layout.addWidget(self.msg_label)
+        figure_layout.addWidget(self.msg_label)
 
         self.draw()
 
@@ -151,6 +150,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
     def click_new_axes(self, data):
         self.pointing_axes = True
+        self.set_message('Click in the figure to place a new axes at that position')
         self.click_axes_data = data
 
     def add_axes_at_position(self, x, y, w=.4, h=.4, n=None, draw=True):
