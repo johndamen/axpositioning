@@ -157,7 +157,8 @@ class PositioningAxes(Axes):
         self.set_yticks([])
         self.set_xlim(-1, 1)
         self.set_ylim(-1, 1)
-        self.text(.1, .9, label, ha='left', va='top', transform=self.transAxes, zorder=2)
+        self.set_facecolor('none')
+        self.text(.05, .95, label, ha='left', va='top', transform=self.transAxes, zorder=2)
 
         ax, ay = self.get_anchor()
         self.scatter([ax], [ay], marker='+', transform=self.transAxes, color=(.9, .1, .1), s=50, clip_on=False, zorder=1)
