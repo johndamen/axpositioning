@@ -1,5 +1,5 @@
 # Various utilities related to axes positioning
-Correctly positioning axes in matplotlib can be a long and iterative process. Using the graphical interface utility `plotutils.adjust_axes(fig)` can ease the process.
+Correctly positioning axes in matplotlib can be a long and iterative process. Using the graphical interface utility `axpositioning.adjust_axes(fig)` can ease the process.
 
 ## Features
 1. Move/resize existing axes
