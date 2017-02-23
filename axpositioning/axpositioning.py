@@ -23,6 +23,32 @@ class PositioningAxes(Axes):
             a = Bbox.coefs[a]
         self._anchor = a
 
+    def split(self, ratio=0.5, spacing=0.1, wsplit=True):
+        if wsplit:
+            pos, size = self.x, self.w
+        else:
+            pos, size = self.y, self.h
+
+        if spacing >= size:
+            raise ValueError('spacing too largs, cannot split axes')
+
+        size1 = (size - spacing) * ratio
+        size2 = (size - spacing) * (1 - ratio)
+
+        pos2 = pos + size1 + spacing
+
+        if wsplit:
+            newbounds = (pos2, self.y, size2, self.h)
+            self.w = size1
+        else:
+            newbounds = (self.x, pos2, self.w, size2)
+            self.h = size1
+
+        return PositioningAxes(self.figure,
+                               newbounds,
+                               lock_aspect=self._locked_aspect,
+                               anchor=self.get_anchor())
+
     @property
     def bounds(self):
         """returns (xll, yll, w, h)"""
@@ -148,23 +174,10 @@ class PositioningAxes(Axes):
         else:
             self.h = self.w / axaspect
 
-    def format_placeholder(self, label=''):
-        """
-        format the axes with no ticks and a simple label in the center
-        the anchor point is shown as a blue circle
-        """
-        self.set_xticks([])
-        self.set_yticks([])
-        self.set_xlim(-1, 1)
-        self.set_ylim(-1, 1)
-        self.set_facecolor('none')
-        self.text(.05, .95, label, ha='left', va='top', transform=self.transAxes, zorder=2)
-
-        ax, ay = self.get_anchor()
-        self.scatter([ax], [ay], marker='+', transform=self.transAxes, color=(.9, .1, .1), s=50, clip_on=False, zorder=1)
-
-    def __str__(self):
-        return '<{} {}>'.format(self.__class__.__qualname__, self.bounds)
+    def __repr__(self):
+        return '<{} ({})>'.format(
+            self.__class__.__qualname__,
+            ', '.join('{:.2f}'.format(b) for b in self.bounds))
 
     @classmethod
     def from_position(cls, fig, x, y, w, h, anchor):

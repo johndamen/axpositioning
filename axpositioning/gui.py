@@ -26,6 +26,36 @@ def hline():
     return f
 
 
+class GuiPositioningAxes(PositioningAxes):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._selected = False
+
+    def format_placeholder(self, label=''):
+        """
+        format the axes with no ticks and a simple label in the center
+        the anchor point is shown as a blue circle
+        """
+        self.set_xticks([])
+        self.set_yticks([])
+        self.set_xlim(-1, 1)
+        self.set_ylim(-1, 1)
+        self.set_facecolor('none')
+        self.text(.05, .95, label, ha='left', va='top', transform=self.transAxes, zorder=2)
+
+        for v in self.spines.values():
+            if self._selected:
+                v.set_color('r')
+                v.set_linewidth(2)
+            else:
+                v.set_color('k')
+                v.set_linewidth(1)
+
+        ax, ay = self.get_anchor()
+        self.scatter([ax], [ay], marker='+', transform=self.transAxes, color=(.9, .1, .1), s=50, clip_on=False, zorder=1)
+
+
 class AxPositioningEditor(QtWidgets.QWidget):
     """
     main widget for editing axes positions
@@ -35,10 +65,13 @@ class AxPositioningEditor(QtWidgets.QWidget):
     >>>fig = plt.figure()
     >>>w, h = fig.get_size_inches()
     >>>AxPositioningEditor((w, h), bounds=[])
-
     """
 
     position_dict = OrderedDict([
+        ('S', 'lower center'),
+        ('N', 'top center'),
+        ('W', 'left center'),
+        ('E', 'right center'),
         ('SW', 'lower left'),
         ('NW', 'upper left'),
         ('NE', 'upper right'),
@@ -117,12 +150,42 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
         w = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(w)
-        clear_all_button = QtWidgets.QPushButton('Clear all')
-        clear_all_button.clicked.connect(self.clear_all)
-        layout.addWidget(clear_all_button)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+
+        # main buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        clear_figure_button = QtWidgets.QPushButton('Clear figure')
+        clear_figure_button.clicked.connect(self.clear_figure)
+        button_layout.addWidget(clear_figure_button)
+        select_all_button = QtWidgets.QPushButton('Select all')
+        select_all_button.clicked.connect(self.select_all_axes)
+        button_layout.addWidget(select_all_button)
+        select_none_button = QtWidgets.QPushButton('Clear selection')
+        select_none_button.clicked.connect(self.select_none_axes)
+        button_layout.addWidget(select_none_button)
+        layout.addLayout(button_layout)
+
+        # actions
+        action_layout = QtWidgets.QHBoxLayout()
+        layout.addLayout(action_layout)
+        action_layout.addItem(QtWidgets.QSpacerItem(
+            0, 0,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Maximum))
+        action_layout.addWidget(QtWidgets.QLabel('Actions'))
+        self.actions_dropdown = QtWidgets.QComboBox()
+        self.actions_dropdown.addItems(sorted(self.axes_actions.keys()))
+        action_layout.addWidget(self.actions_dropdown)
+        execute_action_button = QtWidgets.QPushButton('Apply')
+        execute_action_button.clicked.connect(self.execute_current_action)
+        action_layout.addWidget(execute_action_button)
+
         self.axtable = AxesPositionsWidget(self.axes)
         self.axtable.changed.connect(self.set_ax_position)
         self.axtable.deleted.connect(self.delete_axes)
+        self.axtable.selected.connect(self.select_axes)
         layout.addWidget(self.axtable)
         tools_widget.addTab(w, 'Positions')
 
@@ -138,6 +201,10 @@ class AxPositioningEditor(QtWidgets.QWidget):
         for n, a in self.axes.items():
             bounds.append(a.bounds)
         return bounds
+
+    # ---------
+    # edit axes
+    # ---------
 
     def draw_axes(self, event):
         """create an axes at the click location if self.pointing_axes is enabled"""
@@ -159,7 +226,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         if n is None:
             n = self.next_axes_name()
 
-        self.axes[n] = PositioningAxes.from_position(
+        self.axes[n] = GuiPositioningAxes.from_position(
             self.figure, x, y, w, h, anchor=self.anchor)
 
         if draw:
@@ -176,7 +243,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         if n is None:
             n = self.next_axes_name()
 
-        self.axes[n] = PositioningAxes(self.figure, bounds, anchor=self.anchor)
+        self.axes[n] = GuiPositioningAxes(self.figure, bounds, anchor=self.anchor)
 
         if draw:
             self.draw(posfields=True)
@@ -201,12 +268,6 @@ class AxPositioningEditor(QtWidgets.QWidget):
                 return n
         raise ValueError('could not find unique axis name')
 
-    def clear_all(self):
-        self.figure.clear()
-        for k in list(self.axes.keys()):
-            self.delete_axes(k, redraw=False)
-        self.draw(posfields=True)
-
     def set_ax_position(self, axname, attr, value):
         """
         set the position of an axes from the attribute name
@@ -217,6 +278,16 @@ class AxPositioningEditor(QtWidgets.QWidget):
         ax = self.axes[str(axname)]
         setattr(ax, str(attr), value)
         self.draw(posfields=True)
+
+    def delete_axes(self, name, redraw=True):
+        """delete an axes from the editor"""
+        self.axes.pop(str(name))
+        if redraw:
+            self.draw(posfields=True)
+
+    # -----------
+    #  update gui
+    # -----------
 
     def set_message(self, msg, level='INFO'):
         """
@@ -257,19 +328,132 @@ class AxPositioningEditor(QtWidgets.QWidget):
             self.axtable.clear()
             self.axtable.fill(self.axes)
 
-    def update_anchor(self, pos, clicked):
+    def update_anchor(self, pos, clicked, redraw=True):
         """set the position reference anchor of the axes to a new location"""
         if clicked:
             for name, a in self.axes.items():
                 a.set_anchor(pos)
             self.anchor = pos
-        self.draw(posfields=True)
-
-    def delete_axes(self, name, redraw=True):
-        """delete an axes from the editor"""
-        self.axes.pop(str(name))
         if redraw:
             self.draw(posfields=True)
+
+    # ------------------------------------
+    # selecting axes and executing actions
+    # ------------------------------------
+
+    def execute_current_action(self):
+        axnames = self.get_selected_axes()
+        action = self.actions_dropdown.currentText()
+        print(action, axnames, file=sys.stderr)
+        fn = getattr(self, self.axes_actions[str(action)])
+        fn(axnames)
+
+    def select_axes(self, key, b=True):
+        self.axes[str(key)]._selected = bool(b)
+        self.draw()
+
+    def clear_figure(self):
+        self.figure.clear()
+        for k in list(self.axes.keys()):
+            self.delete_axes(k, redraw=False)
+        self.draw(posfields=True)
+
+    def select_all_axes(self):
+        for a in self.axes.values():
+            a._selected = True
+        self.draw(posfields=True)
+
+    def select_none_axes(self):
+        for a in self.axes.values():
+            a._selected = False
+        self.draw(posfields=True)
+
+    def get_selected_axes(self):
+        return [name for name, a in self.axes.items() if a._selected]
+
+    # --------------
+    # Define actions
+    # --------------
+    axes_actions = {
+        'delete': 'delete_axes_objects',
+        'align X': 'axes_equal_x',
+        'align Y': 'axes_equal_y',
+        'equal width': 'axes_equal_w',
+        'equal height': 'axes_equal_h',
+        'equal aspect': 'axes_equal_aspect',
+        'join': 'axes_join'
+    }
+
+    def delete_axes_objects(self, names, redraw=True):
+        for n in names:
+            self.delete_axes(n, redraw=False)
+        if redraw:
+            self.draw(posfields=True)
+
+    def axes_equal_x(self, names, redraw=True):
+        axes = [self.axes[n] for n in names]
+        x = axes.pop(0).x
+        for a in axes:
+            a.x = x
+        if redraw:
+            self.draw(posfields=True)
+
+    def axes_equal_y(self, names, redraw=True):
+        axes = [self.axes[n] for n in names]
+        y = axes.pop(0).y
+        for a in axes:
+            a.y = y
+        if redraw:
+            self.draw(posfields=True)
+
+    def axes_equal_w(self, names, redraw=True):
+        axes = [self.axes[n] for n in names]
+        w = axes.pop(0).w
+        for a in axes:
+            a.w = w
+        if redraw:
+            self.draw(posfields=True)
+
+    def axes_equal_h(self, names, redraw=True):
+        axes = [self.axes[n] for n in names]
+        h = axes.pop(0).h
+        for a in axes:
+            a.h = h
+        if redraw:
+            self.draw(posfields=True)
+
+    def axes_equal_aspect(self, names, redraw=True):
+        axes = [self.axes[n] for n in names]
+        A = axes.pop(0).aspect
+        for a in axes:
+            a.aspect = A
+        if redraw:
+            self.draw(posfields=True)
+
+    def axes_join(self, names, redraw=True):
+        """join axes within bounding box of all selected axes"""
+        axes = [self.axes[n] for n in names]
+
+        # store anchor
+        anchor = self.anchor
+
+        # update anchor to lower left during processing
+        self.update_anchor('SW', True, redraw=False)
+
+        # determine bounding box
+        xll = min(a.x for a in axes)
+        yll = min(a.y for a in axes)
+        xur = max(a.x + a.w for a in axes)
+        yur = max(a.y + a.h for a in axes)
+
+        # redefine first axes position to bounding box
+        axes[0].set_position((xll, yll, xur-xll, yur-yll))
+
+        # delete other axes
+        self.delete_axes_objects(names[1:], redraw=False)
+
+        # update the anchor to the original
+        self.update_anchor(anchor, True, redraw=redraw)
 
 
 class AxesPositionsWidget(QtWidgets.QTableWidget):
@@ -284,6 +468,7 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
 
     changed = QtCore.pyqtSignal(str, str, object)
     deleted = QtCore.pyqtSignal(str)
+    selected = QtCore.pyqtSignal(str, bool)
 
     def __init__(self, axes):
         super().__init__()
@@ -295,8 +480,8 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
 
     def fill(self, axes):
         """fill the table based on the given axes position objects"""
-        headers = ['X', 'Y', 'Width', 'Height', 'Aspect', 'Actions']
-        widths = [45, 45, 45, 45, 45, 50]
+        headers = ['', 'X', 'Y', 'Width', 'Height', 'Aspect']
+        widths = [20, 45, 45, 45, 45, 45]
         self.setColumnCount(len(headers))
         self.setShowGrid(False)
         for i, w in enumerate(widths):
@@ -306,15 +491,16 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
         self.setRowCount(len(axes))
         names = []
         for i, (k, v) in enumerate(axes.items()):
+            f = QtWidgets.QCheckBox()
+            f.setChecked(v._selected)
+            f.stateChanged.connect(partial(self.selected.emit, k))
+            self.setCellWidget(i, 0, f)
             for j, attr in enumerate(('x', 'y', 'w', 'h', 'aspect')):
                 f = FloatField(getattr(v, attr))
                 f.changed.connect(partial(self.changed.emit, k, attr))
-                self.setCellWidget(i, j, f)
+                self.setCellWidget(i, j+1, f)
 
-            self.delete_button = QtWidgets.QPushButton('x')
-            self.delete_button.setFlat(True)
-            self.delete_button.clicked.connect(partial(self.deleted.emit, k))
-            self.setCellWidget(i, j+1, self.delete_button)
+            self.setRowHeight(i, 25)
 
             names.append(k)
         self.setVerticalHeaderLabels(names)
@@ -451,6 +637,8 @@ class AddAxesWidget(QtWidgets.QWidget):
         self.figure = figure
 
         self.layout = QtWidgets.QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(5)
         self.build_posform()
         self.layout.addWidget(hline())
         self.build_gridform()
@@ -463,7 +651,6 @@ class AddAxesWidget(QtWidgets.QWidget):
     def build_gridform(self):
         layout = QtWidgets.QHBoxLayout()
         self.layout.addLayout(layout)
-        self.layout.setContentsMargins(0, 0, 0, 0)
 
         gridform_left = QtWidgets.QFormLayout()
         gridform_left.setSpacing(3)
