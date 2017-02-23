@@ -344,7 +344,6 @@ class AxPositioningEditor(QtWidgets.QWidget):
     def execute_current_action(self):
         axnames = self.get_selected_axes()
         action = self.actions_dropdown.currentText()
-        print(action, axnames, file=sys.stderr)
         fn = getattr(self, self.axes_actions[str(action)])
         fn(axnames)
 
