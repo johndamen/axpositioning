@@ -1,16 +1,11 @@
 from collections import OrderedDict
-import subprocess
-import sys
-import pickle
 from functools import partial
 from matplotlib.figure import Figure
-from matplotlib.gridspec import GridSpec
-import warnings
 
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-from .model import GuiPositioningAxes
+from .model import AxesSet
 from .widgets import *
 
 
@@ -38,9 +33,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
     click_axes_data = dict(w=.3, h=.3)
 
-    def __init__(self, figsize, bounds=(), dpi=None):
+    def __init__(self, figsize, bounds=(), anchor='C', dpi=None):
         super().__init__()
-        self.anchor = 'C'
 
         w, h = figsize
         self.figure = Figure(figsize=(w, h))
@@ -49,7 +43,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
             dpi = 800 / max(w, h)
             self.figure.set_dpi(dpi)
 
-        self.set_axes(bounds, reset=True, draw=False)
+        self.axes = AxesSet(self.figure, bounds, anchor)
         self.build()
         self.canvas.mpl_connect('button_release_event', self.draw_axes)
         self.pointing_axes = False
@@ -95,7 +89,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         radio_set.setExclusive(True)
         for pos, name in self.position_dict.items():
             w = QtWidgets.QRadioButton(name)
-            if pos == self.anchor:
+            if pos == self.axes.anchor:
                 w.setChecked(True)
             w.clicked.connect(partial(self.update_anchor, pos))
             radio_set.addButton(w)
@@ -181,50 +175,25 @@ class AxPositioningEditor(QtWidgets.QWidget):
     def add_axes_at_position(self, x, y, w=.4, h=.4, n=None, draw=True):
         """add axes at specified location in Figure coordinates"""
 
-        if n is None:
-            n = self.next_axes_name()
-
-        self.axes[n] = GuiPositioningAxes.from_position(
-            self.figure, x, y, w, h, anchor=self.anchor)
+        self.axes.add(x, y, w, h, apply_anchor=True)
 
         if draw:
             self.draw(posfields=True)
 
-        return self.axes[n]
-
-    def add_axes(self, bounds, n=None, draw=True):
-        """
-        add an axes from specified bounds
-        :param bounds: bounds as (x, y, w, h)
-        :param n: name of the axes
-        """
-        if n is None:
-            n = self.next_axes_name()
-
-        self.axes[n] = GuiPositioningAxes(self.figure, bounds, anchor=self.anchor)
+    def add_axes(self, bounds, draw=True):
+        self.axes.add(*bounds)
 
         if draw:
             self.draw(posfields=True)
 
-    def set_axes(self, bounds, reset=False, draw=True):
+    def set_axes(self, bounds, draw=True):
         """set several axes from a list of bounds"""
-        if reset:
-            self.axes = OrderedDict()
 
         for bnd in bounds:
-            self.add_axes(bnd, draw=False)
+            self.axes.add(*bnd)
 
         if draw:
             self.draw(posfields=True)
-
-    def next_axes_name(self):
-        """generate a new unique axes name"""
-        axnames = list(self.axes.keys())
-        for i in range(50):
-            n = chr(65 + i)
-            if n not in axnames:
-                return n
-        raise ValueError('could not find unique axis name')
 
     def set_ax_position(self, axname, attr, value):
         """
@@ -233,8 +202,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         :param attr: name of the position attribute
         :param value: value of the position attribute
         """
-        ax = self.axes[str(axname)]
-        setattr(ax, str(attr), value)
+        self.axes.set_property(str(axname), attr, value)
         self.draw(posfields=True)
 
     def delete_axes(self, name, redraw=True):
@@ -291,7 +259,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         if clicked:
             for name, a in self.axes.items():
                 a.set_anchor(pos)
-            self.anchor = pos
+            self.axes.anchor = pos
         if redraw:
             self.draw(posfields=True)
 
@@ -300,13 +268,14 @@ class AxPositioningEditor(QtWidgets.QWidget):
     # ------------------------------------
 
     def execute_current_action(self):
-        axnames = self.get_selected_axes()
+        if not self.axes.any_selected():
+            return
         action = self.actions_dropdown.currentText()
         fn = getattr(self, self.axes_actions[str(action)])
-        fn(axnames)
+        fn(self.axes.selected_names, self.axes.selected)
 
     def select_axes(self, key, b=True):
-        self.axes[str(key)]._selected = bool(b)
+        self.axes.select(str(key), b)
         self.draw()
 
     def clear_figure(self):
@@ -316,17 +285,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.draw(posfields=True)
 
     def select_all_axes(self):
-        for a in self.axes.values():
-            a._selected = True
+        self.axes.select_all()
         self.draw(posfields=True)
 
     def select_none_axes(self):
-        for a in self.axes.values():
-            a._selected = False
+        self.axes.select_none()
         self.draw(posfields=True)
-
-    def get_selected_axes(self):
-        return [name for name, a in self.axes.items() if a._selected]
 
     # --------------
     # Define actions
@@ -338,61 +302,56 @@ class AxPositioningEditor(QtWidgets.QWidget):
         'equal width': 'axes_equal_w',
         'equal height': 'axes_equal_h',
         'equal aspect': 'axes_equal_aspect',
-        'join': 'axes_join'
+        'join': 'axes_join',
+        'split': 'axes_split'
     }
 
-    def delete_axes_objects(self, names, redraw=True):
+    def delete_axes_objects(self, names, axes, redraw=True):
         for n in names:
-            self.delete_axes(n, redraw=False)
+            self.axes.pop(n)
         if redraw:
             self.draw(posfields=True)
 
-    def axes_equal_x(self, names, redraw=True):
-        axes = [self.axes[n] for n in names]
+    def axes_equal_x(self, names, axes, redraw=True):
         x = axes.pop(0).x
         for a in axes:
             a.x = x
         if redraw:
             self.draw(posfields=True)
 
-    def axes_equal_y(self, names, redraw=True):
-        axes = [self.axes[n] for n in names]
+    def axes_equal_y(self, names, axes, redraw=True):
         y = axes.pop(0).y
         for a in axes:
             a.y = y
         if redraw:
             self.draw(posfields=True)
 
-    def axes_equal_w(self, names, redraw=True):
-        axes = [self.axes[n] for n in names]
+    def axes_equal_w(self, names, axes, redraw=True):
         w = axes.pop(0).w
         for a in axes:
             a.w = w
         if redraw:
             self.draw(posfields=True)
 
-    def axes_equal_h(self, names, redraw=True):
-        axes = [self.axes[n] for n in names]
+    def axes_equal_h(self, names, axes, redraw=True):
         h = axes.pop(0).h
         for a in axes:
             a.h = h
         if redraw:
             self.draw(posfields=True)
 
-    def axes_equal_aspect(self, names, redraw=True):
-        axes = [self.axes[n] for n in names]
+    def axes_equal_aspect(self, names, axes, redraw=True):
         A = axes.pop(0).aspect
         for a in axes:
             a.aspect = A
         if redraw:
             self.draw(posfields=True)
 
-    def axes_join(self, names, redraw=True):
+    def axes_join(self, names, axes, redraw=True):
         """join axes within bounding box of all selected axes"""
-        axes = [self.axes[n] for n in names]
 
         # store anchor
-        anchor = self.anchor
+        anchor = self.axes.anchor
 
         # update anchor to lower left during processing
         self.update_anchor('SW', True, redraw=False)
@@ -407,7 +366,42 @@ class AxPositioningEditor(QtWidgets.QWidget):
         axes[0].set_position((xll, yll, xur-xll, yur-yll))
 
         # delete other axes
-        self.delete_axes_objects(names[1:], redraw=False)
+        self.delete_axes_objects(names[1:], axes[1:], redraw=False)
 
         # update the anchor to the original
         self.update_anchor(anchor, True, redraw=redraw)
+
+    def axes_split(self, names, axes, redraw=True):
+        """
+        split axes in two parts based on a given ratio
+        """
+        def show_error(msg):
+            m = QtWidgets.QMessageBox()
+            m.setText(msg)
+            m.exec()
+
+        # create dialog to input ratio, spacing and h/v split
+        dialog = SplitDialog()
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+        ratio, spacing, horizontal = dialog.get_data()
+
+        if ratio < 0 or ratio > 1:
+            show_error('ratio must be between 0 and 1')
+            return
+
+        for a in axes:
+            try:
+                new_bounds = a.split(ratio, spacing, wsplit=horizontal)
+            except ValueError as e:
+                show_error(str(e))
+                return
+            else:
+                # create 2nd axes and copy selected state
+                new_ax = self.axes.add(*new_bounds, anchor=a.get_anchor())
+                new_ax._selected = a._selected
+
+        if redraw:
+            self.draw(posfields=True)
+
+

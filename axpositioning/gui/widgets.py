@@ -1,9 +1,9 @@
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 from functools import partial
 from matplotlib.gridspec import GridSpec
 
 
-__all__ = ['AxesPositionsWidget', 'NumField', 'IntField', 'MultiIntField', 'FloatField', 'AddAxesWidget']
+__all__ = ['AxesPositionsWidget', 'NumField', 'IntField', 'MultiIntField', 'FloatField', 'AddAxesWidget', 'SplitDialog']
 
 def hline():
     f = QtWidgets.QFrame()
@@ -178,8 +178,8 @@ class AddAxesWidget(QtWidgets.QWidget):
         hspace=0.05,
         wspace=0.05,
 
-        pos_width=0.4,
-        pos_height=0.4,
+        pos_width=0.8,
+        pos_height=0.8,
         pos_x=.5,
         pos_y=.5
     )
@@ -356,5 +356,48 @@ class AddAxesWidget(QtWidgets.QWidget):
 
         self.newbounds.emit(bounds)
 
+
+class SplitDialog(QtWidgets.QDialog):
+
+    data = dict(ratio=0.5, spacing=0.1, horizontal=True)
+
+    def __init__(self):
+        super().__init__()
+        layout = QtWidgets.QFormLayout(self)
+        self.fields = dict()
+
+        f = QtWidgets.QLineEdit()
+        f.setText('{:.3f}'.format(self.data['ratio']))
+        v = QtGui.QDoubleValidator(0, 1, 3)
+        f.setValidator(v)
+        self.fields['ratio'] = f
+        layout.addRow('Ratio', f)
+
+        f = QtWidgets.QLineEdit()
+        f.setText('{:.3f}'.format(self.data['spacing']))
+        v = QtGui.QDoubleValidator(0, 1, 3)
+        f.setValidator(v)
+        self.fields['spacing'] = f
+        layout.addRow('Spacing', f)
+
+        f = QtWidgets.QCheckBox()
+        f.setChecked(self.data['horizontal'])
+        self.fields['horizontal'] = f
+        layout.addRow('Horizontal', f)
+
+        b = QtWidgets.QPushButton('Split')
+        b.clicked.connect(self.accept)
+        layout.addRow('', b)
+
+    def get_data(self):
+        ratio = float(self.fields['ratio'].text())
+        spacing = float(self.fields['spacing'].text())
+        horizontal = bool(self.fields['horizontal'].isChecked())
+
+        self.data['ratio'] = ratio
+        self.data['spacing'] = spacing
+        self.data['horizontal'] = horizontal
+
+        return ratio, spacing, horizontal
 
 
