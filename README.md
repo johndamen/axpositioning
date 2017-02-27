@@ -16,6 +16,12 @@ Using the graphical interface utility `axpositioning.adjust_axes(fig)` can ease 
 
 ## Examples
 
+Run from the command line
+
+```bash
+python -m axpositioning
+```
+
 Adjust axes using gui in script
 
 ```python
