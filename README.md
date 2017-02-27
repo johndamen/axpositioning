@@ -29,7 +29,7 @@ from matplotlib import pyplot as plt
 import axpositioning
 
 fig = plt.figure()
-ax = fig.subplot(111)
+ax = fig.add_subplot(111)
 ax.plot([0, 1], [0, 1])
 
 axpositioning.adjust_axes(fig)
