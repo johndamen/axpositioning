@@ -1,5 +1,4 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
-from functools import partial
 from matplotlib.gridspec import GridSpec
 
 
