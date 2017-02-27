@@ -24,30 +24,33 @@ class PositioningAxes(Axes):
         self._anchor = a
 
     def split(self, ratio=0.5, spacing=0.1, wsplit=True):
-        if wsplit:
-            pos, size = self.x, self.w
-        else:
-            pos, size = self.y, self.h
+        anchor = self.get_anchor()
+        self.set_anchor('SW')
 
-        if spacing >= size:
-            raise ValueError('spacing too largs, cannot split axes')
+        try:
+            if wsplit:
+                pos, size = self.x, self.w
+            else:
+                pos, size = self.y, self.h
 
-        size1 = (size - spacing) * ratio
-        size2 = (size - spacing) * (1 - ratio)
+            if spacing >= size:
+                raise ValueError('spacing too large, cannot split axes')
 
-        pos2 = pos + size1 + spacing
+            size1 = (size - spacing) * ratio
+            size2 = (size - spacing) * (1 - ratio)
 
-        if wsplit:
-            newbounds = (pos2, self.y, size2, self.h)
-            self.w = size1
-        else:
-            newbounds = (self.x, pos2, self.w, size2)
-            self.h = size1
+            pos2 = pos + size1 + spacing
 
-        return PositioningAxes(self.figure,
-                               newbounds,
-                               lock_aspect=self._locked_aspect,
-                               anchor=self.get_anchor())
+            if wsplit:
+                newbounds = (pos2, self.y, size2, self.h)
+                self.w = size1
+            else:
+                newbounds = (self.x, pos2, self.w, size2)
+                self.h = size1
+        finally:
+            self.set_anchor(anchor)
+
+        return newbounds
 
     @property
     def bounds(self):
