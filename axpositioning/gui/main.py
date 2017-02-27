@@ -136,8 +136,9 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
         self.axtable = AxesPositionsWidget(self.axes)
         self.axtable.changed.connect(self.set_ax_position)
-        self.axtable.deleted.connect(self.delete_axes)
         self.axtable.selected.connect(self.select_axes)
+        self.axtable.invalid_value.connect(self.reset_value)
+        self.axtable.moved.connect(self.move_axes)
         layout.addWidget(self.axtable)
         tools_widget.addTab(w, 'Positions')
 
@@ -146,6 +147,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
         w.axes_added.connect(lambda x: self.add_axes_at_position(**x))
         w.click_axes.connect(self.click_new_axes)
         tools_widget.addTab(w, 'Add axes')
+
+    def reset_value(self, row, col, attr):
+        ax = self.axes.names[row]
+        self.axtable.blockSignals(True)
+        self.axtable.item(row, col).setText('{:.3f}'.format(getattr(ax, attr)))
+        self.axtable.blockSignals(False)
 
     def get_bounds(self):
         """returns a list of axes bounds as [(x, y, w, h)]"""
@@ -195,13 +202,14 @@ class AxPositioningEditor(QtWidgets.QWidget):
         if draw:
             self.draw(posfields=True)
 
-    def set_ax_position(self, axname, attr, value):
+    def set_ax_position(self, row, attr, value):
         """
         set the position of an axes from the attribute name
         :param axname: name of the axes
         :param attr: name of the position attribute
         :param value: value of the position attribute
         """
+        axname = self.axes.names[row]
         self.axes.set_property(str(axname), attr, value)
         self.draw(posfields=True)
 
@@ -210,6 +218,24 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.axes.pop(str(name))
         if redraw:
             self.draw(posfields=True)
+
+    def move_axes(self, rows, ind):
+        if ind in rows or ind-1 in rows:
+            return
+        names = self.axes.names
+
+        def keyfn(v):
+            if v in rows:
+                return 1
+            elif v < ind:
+                return 0
+            else:
+                return 2
+
+        indices = sorted(list(range(len(names))), key=keyfn)
+        self.axes.change_order([names[i] for i in indices])
+        self.draw(posfields=True)
+
 
     # -----------
     #  update gui

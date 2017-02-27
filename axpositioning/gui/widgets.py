@@ -22,44 +22,89 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
     - deleted(axes_name)
     """
 
-    changed = QtCore.pyqtSignal(str, str, object)
-    deleted = QtCore.pyqtSignal(str)
+    changed = QtCore.pyqtSignal(int, str, object)
     selected = QtCore.pyqtSignal(str, bool)
+    moved = QtCore.pyqtSignal(list, int)  # row indices, new row index
+    invalid_value = QtCore.pyqtSignal(int, int, str)
+
+    COLUMN_ATTRS = ('_selected', 'x', 'y', 'w', 'h', 'aspect')
+    COLUMN_TYPES = (bool, float, float, float, float, float)
+    COLUMN_NAMES = ('', 'X', 'Y', 'Width', 'Height', 'Aspect')
 
     def __init__(self, axes):
         super().__init__()
         self.build()
         self.fill(axes)
+        self.last_drop_row = None
+        self.cellChanged.connect(self.changed_item)
 
     def build(self):
-        pass
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropOverwriteMode(False)
+        self.horizontalHeader().setSectionsMovable(True)
+        self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
 
     def fill(self, axes):
         """fill the table based on the given axes position objects"""
-        headers = ['', 'X', 'Y', 'Width', 'Height', 'Aspect']
-        widths = [20, 45, 45, 45, 45, 45]
-        self.setColumnCount(len(headers))
+
+        widths = [30, 50, 50, 50, 50, 50]
+        self.setColumnCount(len(self.COLUMN_NAMES))
         self.setShowGrid(False)
         for i, w in enumerate(widths):
             self.setColumnWidth(i, w)
-        self.setHorizontalHeaderLabels(headers)
+        self.setHorizontalHeaderLabels(self.COLUMN_NAMES)
 
         self.setRowCount(len(axes))
         names = []
+        self.blockSignals(True)
         for i, (k, v) in enumerate(axes.items()):
-            f = QtWidgets.QCheckBox()
-            f.setChecked(v._selected)
-            f.stateChanged.connect(partial(self.selected.emit, k))
-            self.setCellWidget(i, 0, f)
-            for j, attr in enumerate(('x', 'y', 'w', 'h', 'aspect')):
-                f = FloatField(getattr(v, attr))
-                f.changed.connect(partial(self.changed.emit, k, attr))
-                self.setCellWidget(i, j+1, f)
-
+            for j, attr in enumerate(self.COLUMN_ATTRS):
+                coltype = self.COLUMN_TYPES[j]
+                flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDragEnabled
+                if coltype is bool:
+                    f = QtWidgets.QTableWidgetItem()
+                    f.setFlags(flags | QtCore.Qt.ItemIsUserCheckable)
+                    f.setCheckState(QtCore.Qt.Checked if v._selected else QtCore.Qt.Unchecked)
+                elif coltype is float:
+                    f = QtWidgets.QTableWidgetItem('{:.3f}'.format(getattr(v, attr)))
+                    f.setFlags(flags | QtCore.Qt.ItemIsEditable)
+                self.setItem(i, j, f)
             self.setRowHeight(i, 25)
 
             names.append(k)
         self.setVerticalHeaderLabels(names)
+        self.blockSignals(False)
+
+    def changed_item(self, row, col):
+        item = self.item(row, col)
+        valtype = self.COLUMN_TYPES[col]
+        if valtype is bool:
+            value = item.checkState() == QtCore.Qt.Checked
+        elif valtype is float:
+            try:
+                value = float(item.text())
+            except ValueError as e:
+                print(e)
+                self.invalid_value.emit(row, col, self.COLUMN_ATTRS[col])
+        else:
+            raise ValueError('unknown value type')
+        self.changed.emit(row, self.COLUMN_ATTRS[col], value)
+
+
+    def dropMimeData(self, row, col, mimeData, action):
+        self.last_drop_row = row
+        return True
+
+    def dropEvent(self, event):
+        sender = event.source()
+        super().dropEvent(event)
+        if sender is self:
+            if self.last_drop_row is None:
+                return
+            event.accept()
+            rows = sorted(set([int(ind.row()) for ind in self.selectedIndexes()]))
+            self.moved.emit(rows, int(self.last_drop_row))
 
 
 class NumField(QtWidgets.QLineEdit):

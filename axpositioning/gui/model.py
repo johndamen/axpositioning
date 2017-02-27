@@ -104,6 +104,22 @@ class AxesSet(OrderedDict):
             fn(a)
 
     @property
+    def names(self):
+        return list(self.keys())
+
+    def change_order(self, newnames):
+        if set(self.names) ^ set(newnames):
+            raise ValueError('moved names do not match current axes names')
+
+        data = dict()
+        for k in self.names:
+            data[k] = self.pop(k)
+        assert not self
+        for name in newnames:
+            self[name] = data.pop(name)
+        assert not data
+
+    @property
     def selected(self):
         return [a for a in self.values() if a._selected]
 
