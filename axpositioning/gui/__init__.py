@@ -1,4 +1,7 @@
-from PyQt5 import QtWidgets, QtCore
+try:
+    from PyQt5 import QtWidgets, QtCore
+except ImportError:
+    from PyQt4 import QtGui as QtWidgets, QtCore
 import sys
 import subprocess
 import pickle
@@ -21,7 +24,7 @@ def position_axes_gui(figsize, bounds, **kwargs):
     w.show()
 
     try:
-        app.exec()
+        app.exec_()
         return w.get_bounds()
     finally:
         w.deleteLater()

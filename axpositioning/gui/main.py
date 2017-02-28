@@ -2,8 +2,13 @@ from collections import OrderedDict
 from functools import partial
 from matplotlib.figure import Figure
 
-from PyQt5 import QtWidgets, QtCore, QtGui
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+try:
+    from PyQt5 import QtWidgets, QtCore
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+except ImportError:
+    from PyQt4 import QtGui, QtCore
+    QtWidgets = QtGui
+    from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 
 from .model import AxesSet
 from .widgets import *
@@ -34,7 +39,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
     click_axes_data = dict(w=.3, h=.3)
 
     def __init__(self, figsize, bounds=(), anchor='C', dpi=None):
-        super().__init__()
+        super(AxPositioningEditor, self).__init__()
 
         w, h = figsize
         self.figure = Figure(figsize=(w, h))
@@ -251,6 +256,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         if msg is None:
             self.msg_label.setText('')
             self.msg_label.hide()
+            return
         else:
             self.msg_label.show()
 
@@ -404,11 +410,11 @@ class AxPositioningEditor(QtWidgets.QWidget):
         def show_error(msg):
             m = QtWidgets.QMessageBox()
             m.setText(msg)
-            m.exec()
+            m.exec_()
 
         # create dialog to input ratio, spacing and h/v split
         dialog = SplitDialog()
-        if dialog.exec() != QtWidgets.QDialog.Accepted:
+        if dialog.exec_() != QtWidgets.QDialog.Accepted:
             return
         ratio, spacing, horizontal = dialog.get_data()
 

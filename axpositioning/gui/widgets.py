@@ -1,4 +1,8 @@
-from PyQt5 import QtWidgets, QtCore, QtGui
+try:
+    from PyQt5 import QtWidgets, QtCore
+except ImportError:
+    from PyQt4 import QtGui, QtCore
+    QtWidgets = QtGui
 from matplotlib.gridspec import GridSpec
 
 
@@ -31,7 +35,7 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
     COLUMN_NAMES = ('', 'X', 'Y', 'Width', 'Height', 'Aspect')
 
     def __init__(self, axes):
-        super().__init__()
+        super(AxesPositionsWidget, self).__init__()
         self.build()
         self.fill(axes)
         self.last_drop_row = None
@@ -41,7 +45,10 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
         self.setDragDropOverwriteMode(False)
-        self.horizontalHeader().setSectionsMovable(True)
+        try:  # try setSectionsMovable introduced in PyQt5
+            self.horizontalHeader().setSectionsMovable(True)
+        except AttributeError:
+            pass
         self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
 
     def fill(self, axes):
@@ -112,7 +119,7 @@ class NumField(QtWidgets.QLineEdit):
     error = QtCore.pyqtSignal(str)
 
     def __init__(self, v, width=45):
-        super().__init__()
+        super(NumField, self).__init__()
         self.val = self.cast(v)
         self.set_value(v)
         self.setFixedWidth(width)
@@ -173,7 +180,7 @@ class MultiIntField(IntField):
     changed = QtCore.pyqtSignal(tuple)
 
     def __init__(self, v, width=60):
-        super().__init__(v, width=width)
+        super(MultiIntField, self).__init__(v, width=width)
 
     def format(self, v):
         return ', '.join(map(str, v))
@@ -200,7 +207,7 @@ class FloatField(NumField):
 
     def __init__(self, v, fmt='{:.3f}', **kw):
         self.fmt = fmt
-        super().__init__(v, **kw)
+        super(FloatField, self).__init__(v, **kw)
 
     def format(self, v):
         return self.fmt.format(v)
@@ -233,7 +240,7 @@ class AddAxesWidget(QtWidgets.QWidget):
     click_axes = QtCore.pyqtSignal(dict)
 
     def __init__(self, figure):
-        super().__init__()
+        super(AddAxesWidget, self).__init__()
         self.figure = figure
 
         self.layout = QtWidgets.QVBoxLayout(self)
@@ -369,7 +376,7 @@ class AddAxesWidget(QtWidgets.QWidget):
             except ValueError as e:
                 msg = QtWidgets.QMessageBox()
                 msg.setText('Invalid value for {}: {}'.format(k, e))
-                msg.exec()
+                msg.exec_()
                 return
             self.VALUES[k] = v
             if k in ('nrows', 'ncols', 'left', 'right', 'top', 'bottom', 'wspace', 'hspace'):
@@ -392,7 +399,7 @@ class AddAxesWidget(QtWidgets.QWidget):
                 except IndexError as e:
                     msg = QtWidgets.QMessageBox()
                     msg.setText('Invalid grid index: {}'.format(e))
-                    msg.exec()
+                    msg.exec_()
                     return
                 bounds.append(bnd)
         else:
@@ -406,7 +413,7 @@ class SplitDialog(QtWidgets.QDialog):
     data = dict(ratio=0.5, spacing=0.1, horizontal=True)
 
     def __init__(self):
-        super().__init__()
+        super(SplitDialog, self).__init__()
         layout = QtWidgets.QFormLayout(self)
         self.fields = dict()
 

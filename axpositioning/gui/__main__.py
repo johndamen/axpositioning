@@ -3,6 +3,7 @@ from .__init__ import *
 
 if __name__ == '__main__':
     import argparse
+    import sys
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--width', '-W', default=8, type=float)
@@ -12,7 +13,10 @@ if __name__ == '__main__':
     kw = vars(parser.parse_args())
     figsize = kw.pop('width'), kw.pop('height')
     if kw.pop('stream_bounds', False):
-        bounds = pickle.Unpickler(sys.stdin.buffer).load()
+        if sys.version_info[0] == 3:
+            bounds = pickle.Unpickler(sys.stdin.buffer).load()
+        else:
+            bounds = pickle.Unpickler(sys.stdin).load()
     else:
         bounds = []
 

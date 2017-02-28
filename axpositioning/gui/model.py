@@ -5,7 +5,7 @@ from ..axpositioning import PositioningAxes
 class GuiPositioningAxes(PositioningAxes):
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(GuiPositioningAxes, self).__init__(*args, **kwargs)
         self._selected = False
 
     def format_placeholder(self, label=''):
@@ -17,7 +17,10 @@ class GuiPositioningAxes(PositioningAxes):
         self.set_yticks([])
         self.set_xlim(-1, 1)
         self.set_ylim(-1, 1)
-        self.set_facecolor('none')
+        try:  # for compatibility
+            self.set_facecolor('none')
+        except AttributeError:
+            self.set_axis_bgcolor('none')
         self.text(.05, .95, label, ha='left', va='top', transform=self.transAxes, zorder=2)
 
         for v in self.spines.values():
@@ -52,7 +55,7 @@ class AxesSet(OrderedDict):
     def __init__(self, fig, bounds, anchor='C'):
         self.figure = fig
         self.anchor = anchor
-        super().__init__()
+        super(AxesSet, self).__init__()
         for bnd in bounds:
             self.add(*bnd)
 
@@ -74,8 +77,8 @@ class AxesSet(OrderedDict):
         return [a.bounds for a in self.values()]
 
     def set_property(self, axname, attr, value):
-        a = self[axname]
-        setattr(a, attr, value)
+        a = self[str(axname)]
+        setattr(a, str(attr), value)
 
     def next_axes_name(self):
         """generate a new unique axes name"""
