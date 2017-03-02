@@ -1,4 +1,4 @@
-# Various utilities related to axes positioning
+# Accurately postioning axes within a matplotlib figure
 Correctly positioning axes in matplotlib can be a long and iterative process. 
 Using the graphical interface utility `axpositioning.adjust_figure_layout(fig)` can ease the process.
 
