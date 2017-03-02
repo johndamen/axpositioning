@@ -9,6 +9,9 @@ from matplotlib.figure import Figure
 from .main import AxPositioningEditor
 
 
+__all__ = ['position_axes_gui', 'position_axes_gui_subprocess', 'adjust_figure_layout']
+
+
 def position_axes_gui(figsize, bounds, **kwargs):
     """
     open gui to set axes positions
@@ -25,7 +28,7 @@ def position_axes_gui(figsize, bounds, **kwargs):
 
     try:
         app.exec_()
-        return w.get_bounds()
+        return w.as_dict()
     finally:
         w.deleteLater()
 
@@ -49,15 +52,20 @@ def position_axes_gui_subprocess(figsize, bounds):
     for line in out.decode('utf-8').splitlines():
         if not line:
             continue
-        newbounds.append([float(v) for v in line.strip().split(',')])
-    return newbounds
+        if line.startswith('FIG:'):
+            figsize = tuple(map(float, line[4:].strip().split(',')))
+        else:
+            newbounds.append([float(v) for v in line.strip().split(',')])
+    return figsize, newbounds
 
 
-def adjust_axes(fig, **kwargs):
+def adjust_figure_layout(fig, **kwargs):
     axes = fig.get_axes()
     bounds = [a.get_position().bounds for a in axes]
 
-    newbounds = position_axes_gui_subprocess(fig.get_size_inches(), bounds)
+    figsize, newbounds = position_axes_gui_subprocess(fig.get_size_inches(), bounds)
+
+    fig.set_size_inches(*figsize)
 
     for a in axes[len(newbounds):]:
         fig.delaxes(a)

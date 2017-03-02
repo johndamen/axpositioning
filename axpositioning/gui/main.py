@@ -3,7 +3,7 @@ from functools import partial
 from matplotlib.figure import Figure
 
 try:
-    from PyQt5 import QtWidgets, QtCore
+    from PyQt5 import QtWidgets, QtCore, QtGui
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 except ImportError:
     from PyQt4 import QtGui, QtCore
@@ -38,15 +38,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
     click_axes_data = dict(w=.3, h=.3)
 
-    def __init__(self, figsize, bounds=(), anchor='C', dpi=None):
+    def __init__(self, figsize, bounds=(), anchor='C', scale=1):
         super(AxPositioningEditor, self).__init__()
-
-        w, h = figsize
+        self.figsize = figsize
+        w, h = self.figsize
         self.figure = Figure(figsize=(w, h))
-
-        if dpi is None:
-            dpi = 800 / max(w, h)
-            self.figure.set_dpi(dpi)
+        self.scale = scale
 
         self.axes = AxesSet(self.figure, bounds, anchor)
         self.build()
@@ -77,7 +74,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
         """build the figure area"""
         figure_scroll_area = QtWidgets.QScrollArea()
 
+        # create canvas
         self.canvas = FigureCanvas(self.figure)
+
+        # update the canvas size based on the figure size
+        self.update_canvas_size()
+
         figure_scroll_area.setWidget(self.canvas)
         layout.addWidget(figure_scroll_area)
 
@@ -87,6 +89,24 @@ class AxPositioningEditor(QtWidgets.QWidget):
         tools_widget = QtWidgets.QTabWidget()
         tools_widget.setFixedWidth(350)
         layout.addWidget(tools_widget)
+
+        fw = QtWidgets.QWidget()
+        figsize_layout = QtWidgets.QFormLayout(fw)
+        self.figure_fields = dict()
+        w, h = self.figsize
+        self.figure_fields['w'] = f = QtWidgets.QLineEdit('{:.2f}'.format(w))
+        f.setValidator(QtGui.QDoubleValidator(0, 1000, 2))
+        figsize_layout.addRow('Width', f)
+        self.figure_fields['h'] = f = QtWidgets.QLineEdit('{:.2f}'.format(h))
+        f.setValidator(QtGui.QDoubleValidator(0, 1000, 2))
+        figsize_layout.addRow('Height', f)
+        self.figure_fields['scale'] = f = QtWidgets.QLineEdit('{:.2f}'.format(self.scale))
+        f.setValidator(QtGui.QDoubleValidator(0, 10, 2))
+        figsize_layout.addRow('Scale', f)
+        b = QtWidgets.QPushButton('Apply')
+        b.clicked.connect(self.set_figsize)
+        figsize_layout.addRow('', b)
+        tools_widget.addTab(fw, 'Figure')
 
         aw = QtWidgets.QWidget()
         anchor_layout = QtWidgets.QVBoxLayout(aw)
@@ -153,6 +173,31 @@ class AxPositioningEditor(QtWidgets.QWidget):
         w.click_axes.connect(self.click_new_axes)
         tools_widget.addTab(w, 'Add axes')
 
+    def update_canvas_size(self):
+        w, h = self.figsize
+        self.figure.set_size_inches(w, h)
+        self.canvas.resize(w*100*self.scale, h*100*self.scale)
+
+    def set_figsize(self):
+        w = self.figure_fields['w'].text()
+        h = self.figure_fields['h'].text()
+        s = self.figure_fields['scale'].text()
+        try:
+            w = float(w)
+            h = float(h)
+            s = float(s)
+        except ValueError:
+            w, h = self.figure.get_size_inches()
+            self.figure_fields['w'].setText('{:.2f}'.format(w))
+            self.figure_fields['h'].setText('{:.2f}'.format(h))
+            self.figure_fields['h'].setText('{:.2f}'.format(self.scale))
+        else:
+            self.figsize = w, h
+            self.scale = s
+            self.figure.set_size_inches(*self.figsize)
+            self.update_canvas_size()
+            self.draw(posfields=True)
+
     def reset_value(self, row, col, attr):
         ax = self.axes.names[row]
         self.axtable.blockSignals(True)
@@ -165,6 +210,9 @@ class AxPositioningEditor(QtWidgets.QWidget):
         for n, a in self.axes.items():
             bounds.append(a.bounds)
         return bounds
+
+    def as_dict(self):
+        return dict(bounds=self.get_bounds(), figsize=self.figsize)
 
     # ---------
     # edit axes
