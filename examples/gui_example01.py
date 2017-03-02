@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from axpositioning import adjust_axes
+from axpositioning import adjust_figure_layout
 
 fig = plt.figure(figsize=(6, 6))
 ax = fig.add_subplot(2,2,3)
@@ -17,7 +17,6 @@ ax.pcolormesh(
     np.random.rand(20, 20),
     cmap='inferno')
 
-adjust_axes(fig)
-print(fig.get_size_inches())
+adjust_figure_layout(fig)
 
 plt.show()

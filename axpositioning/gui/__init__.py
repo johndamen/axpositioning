@@ -6,6 +6,9 @@ from matplotlib.figure import Figure
 from .main import AxPositioningEditor
 
 
+__all__ = ['position_axes_gui', 'position_axes_gui_subprocess', 'adjust_figure_layout']
+
+
 def position_axes_gui(figsize, bounds, **kwargs):
     """
     open gui to set axes positions
@@ -53,7 +56,7 @@ def position_axes_gui_subprocess(figsize, bounds):
     return figsize, newbounds
 
 
-def adjust_axes(fig, **kwargs):
+def adjust_figure_layout(fig, **kwargs):
     axes = fig.get_axes()
     bounds = [a.get_position().bounds for a in axes]
 
