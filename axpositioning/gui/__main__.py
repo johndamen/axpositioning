@@ -16,6 +16,7 @@ if __name__ == '__main__':
     else:
         bounds = []
 
-    bounds = position_axes_gui(figsize, bounds)
-    for bnd in bounds:
+    data = position_axes_gui(figsize, bounds)
+    print('FIG:'+','.join('{:.2f}'.format(s) for s in data['figsize']))
+    for bnd in data['bounds']:
         print(','.join(map(str, bnd)))

@@ -18,4 +18,6 @@ ax.pcolormesh(
     cmap='inferno')
 
 adjust_axes(fig)
+print(fig.get_size_inches())
+
 plt.show()
