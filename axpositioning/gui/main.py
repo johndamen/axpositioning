@@ -33,13 +33,15 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
     click_axes_data = dict(w=.3, h=.3)
 
-    def __init__(self, figsize, bounds=(), anchor='C', scale=1):
+    def __init__(self, figsize, bounds=(), anchor='C', dpi=150):
 
         super().__init__()
         self.figsize = figsize
         w, h = self.figsize
         self.figure = Figure(figsize=(w, h))
-        self.scale = scale
+        self.dpi = dpi
+
+        self.settings = dict(guides=False)
 
         self.axes = AxesSet(self.figure, bounds, anchor)
         self.build()
@@ -70,6 +72,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
         """build the figure area"""
         figure_scroll_area = QtWidgets.QScrollArea()
 
+        figure_scroll_area.setAlignment(QtCore.Qt.AlignCenter)
+
         # create canvas
         self.canvas = FigureCanvas(self.figure)
 
@@ -83,7 +87,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         """build the tools area"""
 
         tools_widget = QtWidgets.QTabWidget()
-        tools_widget.setFixedWidth(350)
+        tools_widget.setFixedWidth(320)
         layout.addWidget(tools_widget)
 
         fw = QtWidgets.QWidget()
@@ -96,30 +100,10 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.figure_fields['h'] = f = QtWidgets.QLineEdit('{:.2f}'.format(h))
         f.setValidator(QtGui.QDoubleValidator(0, 1000, 2))
         figsize_layout.addRow('Height', f)
-        self.figure_fields['scale'] = f = QtWidgets.QLineEdit('{:.2f}'.format(self.scale))
-        f.setValidator(QtGui.QDoubleValidator(0, 10, 2))
-        figsize_layout.addRow('Scale', f)
         b = QtWidgets.QPushButton('Apply')
         b.clicked.connect(self.set_figsize)
         figsize_layout.addRow('', b)
         tools_widget.addTab(fw, 'Figure')
-
-        aw = QtWidgets.QWidget()
-        anchor_layout = QtWidgets.QVBoxLayout(aw)
-        radio_set = QtWidgets.QButtonGroup()
-        radio_set.setExclusive(True)
-        for pos, name in self.position_dict.items():
-            w = QtWidgets.QRadioButton(name)
-            if pos == self.axes.anchor:
-                w.setChecked(True)
-            w.clicked.connect(partial(self.update_anchor, pos))
-            radio_set.addButton(w)
-            anchor_layout.addWidget(w)
-        anchor_layout.addItem(QtWidgets.QSpacerItem(
-            0, 0,
-            QtWidgets.QSizePolicy.Maximum,
-            QtWidgets.QSizePolicy.Expanding))
-        tools_widget.addTab(aw, 'Anchors')
 
         w = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(w)
@@ -169,27 +153,51 @@ class AxPositioningEditor(QtWidgets.QWidget):
         w.click_axes.connect(self.click_new_axes)
         tools_widget.addTab(w, 'Add axes')
 
+        sw = QtWidgets.QWidget()
+        settings_layout = QtWidgets.QVBoxLayout(sw)
+        settings_layout.addWidget(QtWidgets.QLabel('Anchor'))
+        radio_set = QtWidgets.QButtonGroup()
+        radio_set.setExclusive(True)
+        for pos, name in self.position_dict.items():
+            w = QtWidgets.QRadioButton(name)
+            if pos == self.axes.anchor:
+                w.setChecked(True)
+            w.clicked.connect(partial(self.update_anchor, pos))
+            radio_set.addButton(w)
+            settings_layout.addWidget(w)
+
+        settings_layout.addWidget(hline())
+
+        cb = QtWidgets.QCheckBox('show guides')
+        cb.setChecked(self.settings.get('guides'))
+        cb.stateChanged.connect(self.set_show_guides)
+        settings_layout.addWidget(cb)
+
+        settings_layout.addItem(QtWidgets.QSpacerItem(
+            0, 0,
+            QtWidgets.QSizePolicy.Maximum,
+            QtWidgets.QSizePolicy.Expanding))
+        tools_widget.addTab(sw, 'Settings')
+
     def update_canvas_size(self):
         w, h = self.figsize
         self.figure.set_size_inches(w, h)
-        self.canvas.resize(w*100*self.scale, h*100*self.scale)
+        self.figure.set_dpi(self.dpi)
+        screenwidth, screenheight = w * self.dpi, h * self.dpi
+        self.canvas.resize(.5*screenwidth, .5*screenheight)
 
     def set_figsize(self):
         w = self.figure_fields['w'].text()
         h = self.figure_fields['h'].text()
-        s = self.figure_fields['scale'].text()
         try:
             w = float(w)
             h = float(h)
-            s = float(s)
         except ValueError:
             w, h = self.figure.get_size_inches()
             self.figure_fields['w'].setText('{:.2f}'.format(w))
             self.figure_fields['h'].setText('{:.2f}'.format(h))
-            self.figure_fields['h'].setText('{:.2f}'.format(self.scale))
         else:
             self.figsize = w, h
-            self.scale = s
             self.figure.set_size_inches(*self.figsize)
             self.update_canvas_size()
             self.draw(posfields=True)
@@ -222,6 +230,10 @@ class AxPositioningEditor(QtWidgets.QWidget):
             self.pointing_axes = False
             # clear the message widget
             self.set_message(None)
+
+    def set_show_guides(self, b):
+        self.settings['guides'] = bool(b)
+        self.draw(posfields=False)
 
     def click_new_axes(self, data):
         self.pointing_axes = True
@@ -323,6 +335,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
         for name, a in self.axes.items():
             a.format_placeholder(name)
             self.figure.add_axes(a)
+        if self.settings['guides']:
+            self.axes.plot_guides()
         self.canvas.draw_idle()
 
         if posfields:

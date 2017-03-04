@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from ..axpositioning import PositioningAxes
+import numpy as np
 
 
 class GuiPositioningAxes(PositioningAxes):
@@ -46,6 +47,34 @@ class GuiPositioningAxes(PositioningAxes):
                      clip_on=False,
                      zorder=10)
 
+    def get_guides(self):
+        pnts = list(map(float, self.get_position().get_points().flatten()))
+        x = pnts[::2]
+        y = pnts[1::2]
+        xc = sum(x)/2
+        yc = sum(y)/2
+        return set(x), set(y), set([xc]), set([yc])
+
+    def plot_guides(self, x, y, xc, yc, color='g', ccolor='y', lw=1):
+        kw = dict(transform=self.figure.transFigure, clip_on=False)
+        labelkw = kw.copy()
+        labelkw['size'] = 9
+        labelfmt = '{:.3f}'
+
+        lx = list(x) + list(xc)
+        xcolors = [color]*len(x)+[ccolor]*len(xc)
+        for vx, c in zip(lx, xcolors):
+            self.plot([vx, vx], [0, 1], color=c, lw=lw, **kw)
+            self.text(vx, 0.01, labelfmt.format(vx).lstrip('0'), ha='center', va='bottom', **labelkw)
+            self.text(vx, 0.99, labelfmt.format(vx).lstrip('0'), ha='center', va='top', **labelkw)
+
+        ly = list(y) + list(yc)
+        ycolors = [color] * len(y) + [ccolor] * len(yc)
+        for vy, c in zip(ly, ycolors):
+            self.plot([0, 1], [vy, vy], color=c, lw=lw, **kw)
+            self.text(0.01, vy, labelfmt.format(vy).lstrip('0'), ha='left', va='center', **labelkw)
+            self.text(0.99, vy, labelfmt.format(vy).lstrip('0'), ha='right', va='center', **labelkw)
+
 
 class AxesSet(OrderedDict):
 
@@ -69,6 +98,23 @@ class AxesSet(OrderedDict):
         self[n] = a
 
         return a
+
+    def plot_guides(self, selected=True):
+        x = set()
+        y = set()
+        xc = set()
+        yc = set()
+        a = None
+        for a in self.values():
+            if selected and not a._selected:
+                continue
+            ax, ay, axc, ayc = a.get_guides()
+            x |= ax
+            y |= ay
+            xc |= axc
+            yc |= ayc
+        if a is not None:
+            a.plot_guides(x, y, xc, yc)
 
     def bounds(self):
         return [a.bounds for a in self.values()]

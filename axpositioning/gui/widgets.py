@@ -2,7 +2,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from matplotlib.gridspec import GridSpec
 
 
-__all__ = ['AxesPositionsWidget', 'NumField', 'IntField', 'MultiIntField', 'FloatField', 'AddAxesWidget', 'SplitDialog']
+__all__ = ['hline', 'AxesPositionsWidget', 'NumField', 'IntField', 'MultiIntField', 'FloatField', 'AddAxesWidget', 'SplitDialog']
 
 def hline():
     f = QtWidgets.QFrame()
