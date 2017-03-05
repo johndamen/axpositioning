@@ -30,10 +30,10 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
     COLUMN_TYPES = (bool, float, float, float, float, float)
     COLUMN_NAMES = ('', 'X', 'Y', 'Width', 'Height', 'Aspect')
 
-    def __init__(self, axes):
+    def __init__(self, axes, **kw):
         super().__init__()
         self.build()
-        self.fill(axes)
+        self.fill(axes, **kw)
         self.last_drop_row = None
         self.cellChanged.connect(self.changed_item)
 
@@ -44,7 +44,7 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
         self.horizontalHeader().setSectionsMovable(True)
         self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
 
-    def fill(self, axes):
+    def fill(self, axes, relative=True):
         """fill the table based on the given axes position objects"""
 
         widths = [30, 50, 50, 50, 50, 50]
@@ -61,12 +61,16 @@ class AxesPositionsWidget(QtWidgets.QTableWidget):
             for j, attr in enumerate(self.COLUMN_ATTRS):
                 coltype = self.COLUMN_TYPES[j]
                 flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDragEnabled
+                value = getattr(v, attr)
                 if coltype is bool:
                     f = QtWidgets.QTableWidgetItem()
                     f.setFlags(flags | QtCore.Qt.ItemIsUserCheckable)
-                    f.setCheckState(QtCore.Qt.Checked if v._selected else QtCore.Qt.Unchecked)
+                    f.setCheckState(QtCore.Qt.Checked if value else QtCore.Qt.Unchecked)
                 elif coltype is float:
-                    f = QtWidgets.QTableWidgetItem('{:.3f}'.format(getattr(v, attr)))
+                    if not relative and attr in ('x', 'y', 'w', 'h'):
+                        f = QtWidgets.QTableWidgetItem('{:.0f}'.format(v.rel2abs(value, attr)))
+                    else:
+                        f = QtWidgets.QTableWidgetItem('{:.3f}'.format(value))
                     f.setFlags(flags | QtCore.Qt.ItemIsEditable)
                 self.setItem(i, j, f)
             self.setRowHeight(i, 25)

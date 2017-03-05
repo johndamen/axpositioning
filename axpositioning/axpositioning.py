@@ -61,6 +61,15 @@ class PositioningAxes(Axes):
         """set new bounds"""
         self.set_position(v)
 
+    @property
+    def absolute_bounds(self):
+        """screen coordinates of bounds"""
+        x, y, w, h = self.bounds
+        return self.rel2abs(x, 'x'), \
+               self.rel2abs(y, 'y'), \
+               self.rel2abs(w, 'w'), \
+               self.rel2abs(h, 'h')
+
     def x2xll(self, x):
         """convert x position to xll based on anchor"""
         return x - self.w * self.get_anchor()[0]
@@ -191,3 +200,23 @@ class PositioningAxes(Axes):
         o = cls(fig, [x, y, w, h], anchor=anchor)
         o.x, o.y, o.w, o.h = x, y, w, h
         return o
+
+    def abs2rel(self, val, attr):
+        w, h = self.figure.get_size_inches()
+        dpi = self.figure.get_dpi()
+        if attr in ('w', 'x'):
+            return val / (w*dpi)
+        elif attr in ('h', 'y'):
+            return val / (h*dpi)
+        else:
+            return val
+
+    def rel2abs(self, val, attr):
+        w, h = self.figure.get_size_inches()
+        dpi = self.figure.get_dpi()
+        if attr in ('w', 'x'):
+            return val * w * dpi
+        elif attr in ('h', 'y'):
+            return val * h * dpi
+        else:
+            return val

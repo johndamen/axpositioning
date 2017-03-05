@@ -41,7 +41,9 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.figure = Figure(figsize=(w, h))
         self.dpi = dpi
 
-        self.settings = dict(guides=False, guides_selected=True, guides_relative=True)
+        self.settings = dict(guides=False,
+                             guides_selected=False,
+                             relative=True)
         self.guides_subsetting_fields = []
 
         self.axes = AxesSet(self.figure, bounds, anchor)
@@ -148,14 +150,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.guides_subsetting_fields.append(cb2)
         l.addWidget(cb2)
 
-        cb3 = QtWidgets.QCheckBox('show relative positions')
-        cb3.setChecked(self.settings['guides_relative'])
-        cb3.stateChanged.connect(self.set_guides_relative)
-        cb3.setEnabled(self.settings['guides'])
-        self.guides_subsetting_fields.append(cb3)
-        l.addWidget(cb3)
-
         settings_layout.addWidget(f)
+
+        cb3 = QtWidgets.QCheckBox('relative positions')
+        cb3.setChecked(self.settings['relative'])
+        cb3.stateChanged.connect(self.set_relative)
+        settings_layout.addWidget(cb3)
 
         settings_layout.addItem(QtWidgets.QSpacerItem(
             0, 0,
@@ -270,9 +270,9 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.settings['guides_selected'] = bool(b)
         self.draw(posfields=False)
 
-    def set_guides_relative(self, b):
-        self.settings['guides_relative'] = bool(b)
-        self.draw(posfields=False)
+    def set_relative(self, b):
+        self.settings['relative'] = bool(b)
+        self.draw(posfields=True)
 
     def click_new_axes(self, data):
         self.pointing_axes = True
@@ -310,7 +310,7 @@ class AxPositioningEditor(QtWidgets.QWidget):
         :param value: value of the position attribute
         """
         axname = self.axes.names[row]
-        self.axes.set_property(str(axname), attr, value)
+        self.axes.set_property(str(axname), attr, value, relative=self.settings['relative'])
         self.draw(posfields=True)
 
     def delete_axes(self, name, redraw=True):
@@ -376,12 +376,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
             self.figure.add_axes(a)
         if self.settings['guides']:
             self.axes.plot_guides(selected=self.settings['guides_selected'],
-                                  relative=self.settings['guides_relative'])
+                                  relative=self.settings['relative'])
         self.canvas.draw_idle()
 
         if posfields:
             self.axtable.clear()
-            self.axtable.fill(self.axes)
+            self.axtable.fill(self.axes, relative=self.settings['relative'])
 
     def update_anchor(self, pos, clicked, redraw=True):
         """set the position reference anchor of the axes to a new location"""

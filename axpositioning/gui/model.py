@@ -134,8 +134,10 @@ class AxesSet(OrderedDict):
     def bounds(self):
         return [a.bounds for a in self.values()]
 
-    def set_property(self, axname, attr, value):
+    def set_property(self, axname, attr, value, relative=True):
         a = self[axname]
+        if not relative:
+            value = a.abs2rel(value, attr=attr)
         setattr(a, attr, value)
 
     def next_axes_name(self):
