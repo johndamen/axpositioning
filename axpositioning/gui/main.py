@@ -41,7 +41,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.figure = Figure(figsize=(w, h))
         self.dpi = dpi
 
-        self.settings = dict(guides=False)
+        self.settings = dict(guides=False, guides_selected=True, guides_relative=True)
+        self.guides_subsetting_fields = []
 
         self.axes = AxesSet(self.figure, bounds, anchor)
         self.build()
@@ -105,6 +106,65 @@ class AxPositioningEditor(QtWidgets.QWidget):
         figsize_layout.addRow('', b)
         tools_widget.addTab(fw, 'Figure')
 
+        tools_widget.addTab(self.build_positions_tab(), 'Positions')
+
+        w = AddAxesWidget(self.figure)
+        w.newbounds.connect(self.set_axes)
+        w.axes_added.connect(lambda x: self.add_axes_at_position(**x))
+        w.click_axes.connect(self.click_new_axes)
+        tools_widget.addTab(w, 'Add axes')
+
+        tools_widget.addTab(self.build_settings_tab(), 'Settings')
+
+    def build_settings_tab(self):
+        sw = QtWidgets.QWidget()
+        settings_layout = QtWidgets.QVBoxLayout(sw)
+        settings_layout.addWidget(QtWidgets.QLabel('Anchor'))
+        radio_set = QtWidgets.QButtonGroup()
+        radio_set.setExclusive(True)
+        for pos, name in self.position_dict.items():
+            w = QtWidgets.QRadioButton(name)
+            if pos == self.axes.anchor:
+                w.setChecked(True)
+            w.clicked.connect(partial(self.update_anchor, pos))
+            radio_set.addButton(w)
+            settings_layout.addWidget(w)
+
+        settings_layout.addWidget(hline())
+
+        cb = QtWidgets.QCheckBox('show guides')
+        cb.setChecked(self.settings.get('guides'))
+        cb.stateChanged.connect(self.set_show_guides)
+        settings_layout.addWidget(cb)
+
+        f = QtWidgets.QFrame()
+        l = QtWidgets.QVBoxLayout(f)
+        l.setContentsMargins(10, 5, 5, 5)
+
+        cb2 = QtWidgets.QCheckBox('for selected axes only')
+        cb2.setChecked(self.settings['guides_selected'])
+        cb2.stateChanged.connect(self.set_guides_selected)
+        cb2.setEnabled(self.settings['guides'])
+        self.guides_subsetting_fields.append(cb2)
+        l.addWidget(cb2)
+
+        cb3 = QtWidgets.QCheckBox('show relative positions')
+        cb3.setChecked(self.settings['guides_relative'])
+        cb3.stateChanged.connect(self.set_guides_relative)
+        cb3.setEnabled(self.settings['guides'])
+        self.guides_subsetting_fields.append(cb3)
+        l.addWidget(cb3)
+
+        settings_layout.addWidget(f)
+
+        settings_layout.addItem(QtWidgets.QSpacerItem(
+            0, 0,
+            QtWidgets.QSizePolicy.Maximum,
+            QtWidgets.QSizePolicy.Expanding))
+
+        return sw
+
+    def build_positions_tab(self):
         w = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -145,39 +205,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.axtable.invalid_value.connect(self.reset_value)
         self.axtable.moved.connect(self.move_axes)
         layout.addWidget(self.axtable)
-        tools_widget.addTab(w, 'Positions')
 
-        w = AddAxesWidget(self.figure)
-        w.newbounds.connect(self.set_axes)
-        w.axes_added.connect(lambda x: self.add_axes_at_position(**x))
-        w.click_axes.connect(self.click_new_axes)
-        tools_widget.addTab(w, 'Add axes')
-
-        sw = QtWidgets.QWidget()
-        settings_layout = QtWidgets.QVBoxLayout(sw)
-        settings_layout.addWidget(QtWidgets.QLabel('Anchor'))
-        radio_set = QtWidgets.QButtonGroup()
-        radio_set.setExclusive(True)
-        for pos, name in self.position_dict.items():
-            w = QtWidgets.QRadioButton(name)
-            if pos == self.axes.anchor:
-                w.setChecked(True)
-            w.clicked.connect(partial(self.update_anchor, pos))
-            radio_set.addButton(w)
-            settings_layout.addWidget(w)
-
-        settings_layout.addWidget(hline())
-
-        cb = QtWidgets.QCheckBox('show guides')
-        cb.setChecked(self.settings.get('guides'))
-        cb.stateChanged.connect(self.set_show_guides)
-        settings_layout.addWidget(cb)
-
-        settings_layout.addItem(QtWidgets.QSpacerItem(
-            0, 0,
-            QtWidgets.QSizePolicy.Maximum,
-            QtWidgets.QSizePolicy.Expanding))
-        tools_widget.addTab(sw, 'Settings')
+        return w
 
     def update_canvas_size(self):
         w, h = self.figsize
@@ -233,6 +262,16 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
     def set_show_guides(self, b):
         self.settings['guides'] = bool(b)
+        for item in self.guides_subsetting_fields:
+            item.setEnabled(b)
+        self.draw(posfields=False)
+
+    def set_guides_selected(self, b):
+        self.settings['guides_selected'] = bool(b)
+        self.draw(posfields=False)
+
+    def set_guides_relative(self, b):
+        self.settings['guides_relative'] = bool(b)
         self.draw(posfields=False)
 
     def click_new_axes(self, data):
@@ -336,7 +375,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
             a.format_placeholder(name)
             self.figure.add_axes(a)
         if self.settings['guides']:
-            self.axes.plot_guides()
+            self.axes.plot_guides(selected=self.settings['guides_selected'],
+                                  relative=self.settings['guides_relative'])
         self.canvas.draw_idle()
 
         if posfields:

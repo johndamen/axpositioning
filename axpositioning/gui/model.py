@@ -51,29 +51,44 @@ class GuiPositioningAxes(PositioningAxes):
         pnts = list(map(float, self.get_position().get_points().flatten()))
         x = pnts[::2]
         y = pnts[1::2]
+
         xc = sum(x)/2
         yc = sum(y)/2
         return set(x), set(y), set([xc]), set([yc])
 
-    def plot_guides(self, x, y, xc, yc, color='g', ccolor='y', lw=1):
+    def plot_guides(self, x, y, xc, yc, color='g', ccolor='y', lw=1, relative=True):
         kw = dict(transform=self.figure.transFigure, clip_on=False)
         labelkw = kw.copy()
         labelkw['size'] = 9
-        labelfmt = '{:.3f}'
+        if relative:
+            labelfmt = '{:.3f}'
+        else:
+            labelfmt = '{:.0f}'
+
+        w, h = self.figure.get_size_inches()
+        dpi = self.figure.get_dpi()
 
         lx = list(x) + list(xc)
         xcolors = [color]*len(x)+[ccolor]*len(xc)
         for vx, c in zip(lx, xcolors):
+            if relative:
+                label = labelfmt.format(vx).lstrip('0')
+            else:
+                label = labelfmt.format(vx * w * dpi)
             self.plot([vx, vx], [0, 1], color=c, lw=lw, **kw)
-            self.text(vx, 0.01, labelfmt.format(vx).lstrip('0'), ha='center', va='bottom', **labelkw)
-            self.text(vx, 0.99, labelfmt.format(vx).lstrip('0'), ha='center', va='top', **labelkw)
+            self.text(vx, 0.01, label, ha='center', va='bottom', **labelkw)
+            self.text(vx, 0.99, label, ha='center', va='top', **labelkw)
 
         ly = list(y) + list(yc)
         ycolors = [color] * len(y) + [ccolor] * len(yc)
         for vy, c in zip(ly, ycolors):
+            if relative:
+                label = labelfmt.format(vy).lstrip('0')
+            else:
+                label = labelfmt.format(vy * h * dpi)
             self.plot([0, 1], [vy, vy], color=c, lw=lw, **kw)
-            self.text(0.01, vy, labelfmt.format(vy).lstrip('0'), ha='left', va='center', **labelkw)
-            self.text(0.99, vy, labelfmt.format(vy).lstrip('0'), ha='right', va='center', **labelkw)
+            self.text(0.01, vy, label, ha='left', va='center', **labelkw)
+            self.text(0.99, vy, label, ha='right', va='center', **labelkw)
 
 
 class AxesSet(OrderedDict):
@@ -99,7 +114,7 @@ class AxesSet(OrderedDict):
 
         return a
 
-    def plot_guides(self, selected=True):
+    def plot_guides(self, selected=True, relative=True):
         x = set()
         y = set()
         xc = set()
@@ -114,7 +129,7 @@ class AxesSet(OrderedDict):
             xc |= axc
             yc |= ayc
         if a is not None:
-            a.plot_guides(x, y, xc, yc)
+            a.plot_guides(x, y, xc, yc, relative=relative)
 
     def bounds(self):
         return [a.bounds for a in self.values()]
