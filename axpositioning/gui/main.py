@@ -20,16 +20,18 @@ class AxPositioningEditor(QtWidgets.QWidget):
     >>>AxPositioningEditor((w, h), bounds=[])
     """
 
-    position_dict = OrderedDict([
-        ('S', 'lower center'),
-        ('N', 'top center'),
-        ('W', 'left center'),
-        ('E', 'right center'),
-        ('SW', 'lower left'),
-        ('NW', 'upper left'),
-        ('NE', 'upper right'),
-        ('SE', 'lower right'),
-        ('C', 'center')])
+    position_codes = ['S', 'N', 'W', 'E', 'SW', 'NW', 'NE', 'SE', 'C']
+
+    position_names = [
+        'lower center',
+        'top center',
+        'left center',
+        'right center',
+        'lower left',
+        'upper left',
+        'upper right',
+        'lower right',
+        'center']
 
     click_axes_data = dict(w=.3, h=.3)
 
@@ -121,16 +123,12 @@ class AxPositioningEditor(QtWidgets.QWidget):
     def build_settings_tab(self):
         sw = QtWidgets.QWidget()
         settings_layout = QtWidgets.QVBoxLayout(sw)
-        settings_layout.addWidget(QtWidgets.QLabel('Anchor'))
-        radio_set = QtWidgets.QButtonGroup()
-        radio_set.setExclusive(True)
-        for pos, name in self.position_dict.items():
-            w = QtWidgets.QRadioButton(name)
-            if pos == self.axes.anchor:
-                w.setChecked(True)
-            w.clicked.connect(partial(self.update_anchor, pos))
-            radio_set.addButton(w)
-            settings_layout.addWidget(w)
+        settings_layout.addWidget(QtWidgets.QLabel('Axes anchor'))
+        dropdown = QtWidgets.QComboBox()
+        dropdown.addItems(self.position_names)
+        dropdown.currentIndexChanged.connect(lambda x: self.update_anchor(self.position_codes[x]))
+        dropdown.setCurrentIndex(self.position_codes.index(self.axes.anchor))
+        settings_layout.addWidget(dropdown)
 
         settings_layout.addWidget(hline())
 
@@ -152,9 +150,9 @@ class AxPositioningEditor(QtWidgets.QWidget):
 
         settings_layout.addWidget(f)
 
-        cb3 = QtWidgets.QCheckBox('relative positions')
-        cb3.setChecked(self.settings['relative'])
-        cb3.stateChanged.connect(self.set_relative)
+        cb3 = QtWidgets.QCheckBox('absolute positions (dots)')
+        cb3.setChecked(not self.settings['relative'])
+        cb3.stateChanged.connect(self.set_absolute)
         settings_layout.addWidget(cb3)
 
         settings_layout.addItem(QtWidgets.QSpacerItem(
@@ -270,8 +268,8 @@ class AxPositioningEditor(QtWidgets.QWidget):
         self.settings['guides_selected'] = bool(b)
         self.draw(posfields=False)
 
-    def set_relative(self, b):
-        self.settings['relative'] = bool(b)
+    def set_absolute(self, b):
+        self.settings['relative'] = not bool(b)
         self.draw(posfields=True)
 
     def click_new_axes(self, data):
@@ -383,12 +381,11 @@ class AxPositioningEditor(QtWidgets.QWidget):
             self.axtable.clear()
             self.axtable.fill(self.axes, relative=self.settings['relative'])
 
-    def update_anchor(self, pos, clicked, redraw=True):
+    def update_anchor(self, pos, redraw=True):
         """set the position reference anchor of the axes to a new location"""
-        if clicked:
-            for name, a in self.axes.items():
-                a.set_anchor(pos)
-            self.axes.anchor = pos
+        for name, a in self.axes.items():
+            a.set_anchor(pos)
+        self.axes.anchor = pos
         if redraw:
             self.draw(posfields=True)
 
